@@ -1,0 +1,115 @@
+{
+  "config_general": {
+    "lighteval_sha": "?",
+    "num_fewshot_seeds": 1,
+    "override_batch_size": -1,
+    "max_samples": null,
+    "job_id": 0,
+    "start_time": 6405.931691398,
+    "end_time": 6518.414348181,
+    "total_evaluation_time_secondes": "112.48265678299958",
+    "model_name": "google/gemma-3-1b-it",
+    "model_sha": "",
+    "model_dtype": null,
+    "model_size": null,
+    "generation_parameters": {
+      "early_stopping": null,
+      "repetition_penalty": null,
+      "frequency_penalty": null,
+      "length_penalty": null,
+      "presence_penalty": null,
+      "max_new_tokens": 8192,
+      "min_new_tokens": null,
+      "seed": null,
+      "stop_tokens": null,
+      "temperature": 0.6,
+      "top_k": null,
+      "min_p": null,
+      "top_p": 0.95,
+      "truncate_prompt": null,
+      "response_format": null
+    }
+  },
+  "results": {
+    "custom|aime24|0": {
+      "extractive_match": 0.03333333333333333,
+      "extractive_match_stderr": 0.033333333333333326
+    },
+    "all": {
+      "extractive_match": 0.03333333333333333,
+      "extractive_match_stderr": 0.033333333333333326
+    }
+  },
+  "versions": {
+    "custom|aime24|0": 1
+  },
+  "config_tasks": {
+    "custom|aime24": {
+      "name": "aime24",
+      "prompt_function": "aime_prompt_fn",
+      "hf_repo": "HuggingFaceH4/aime_2024",
+      "hf_subset": "default",
+      "metric": [
+        {
+          "metric_name": "extractive_match",
+          "higher_is_better": true,
+          "category": "3",
+          "use_case": "1",
+          "sample_level_fn": "sample_level_fn",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "train"
+      ],
+      "trust_dataset": false,
+      "evaluation_splits": [
+        "train"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": null,
+      "generation_size": 8192,
+      "generation_grammar": null,
+      "stop_sequence": [],
+      "num_samples": null,
+      "suite": [
+        "custom"
+      ],
+      "original_num_docs": 30,
+      "effective_num_docs": 30,
+      "must_remove_duplicate_docs": false,
+      "version": 1
+    }
+  },
+  "summary_tasks": {
+    "custom|aime24|0": {
+      "hashes": {
+        "hash_examples": "ddec8fc79d0a014b",
+        "hash_full_prompts": "7ebd74e67e8a1854",
+        "hash_input_tokens": "8496ec8eef08df5b",
+        "hash_cont_tokens": "4299d78e8c6e7215"
+      },
+      "truncated": 0,
+      "non_truncated": 30,
+      "padded": 0,
+      "non_padded": 30,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    }
+  },
+  "summary_general": {
+    "hashes": {
+      "hash_examples": "c903e836a519cf98",
+      "hash_full_prompts": "cecc0e975eafea81",
+      "hash_input_tokens": "09bdc442bf468ec2",
+      "hash_cont_tokens": "e52cc2224f14410f"
+    },
+    "truncated": 0,
+    "non_truncated": 30,
+    "padded": 0,
+    "non_padded": 30,
+    "num_truncated_few_shots": 0
+  }
+}
