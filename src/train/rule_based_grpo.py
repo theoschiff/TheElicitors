@@ -141,7 +141,7 @@ def grpo_function(
     # Log and save metrics
     metrics = train_result.metrics
     metrics["train_samples"] = len(train_dataset)
-    trainer.log_metrics("train", metrics)
+    # trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
     trainer.save_state()
 

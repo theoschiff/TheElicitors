@@ -12,39 +12,38 @@
 
 echo STARTING AT `date`
 
-module load gcc cuda  openmpi python
+module load gcc cuda openmpi python
 
+cd ..
+cd MasterProject/
+source venvs/train/bin/activate
 cd ..
 cd TheElicitors/src
 
 nvcc --version
 
+nvidia-smi
+
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
-GPUS_PER_NODE=2
-# so processes know who to talk to
-MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
-MASTER_PORT=6000
-NNODES=$SLURM_NNODES
-NODE_RANK=$SLURM_PROCID 
-WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
-NODELIST=($(scontrol show hostnames $SLURM_JOB_NODELIST))
-TRAIN_NODES=("${NODELIST[@]}")
-
-
-echo "MASTER_ADDR=$MASTER_ADDR"
-echo "MASTER_PORT=$MASTER_PORT"
-echo "NNODES=$NNODES"
-echo "NODE_RANK=$NODE_RANK"
-echo "WORLD_SIZE=$WORLD_SIZE"
-echo "TRAIN_NODES=$TRAIN_NODES"
 
 export TOKENIZERS_PARALLELISM=true
 
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-export HF_HOME="/scratch/barghorn/.cache"
+export HF_HOME="/scratch/schifferli/.cache"
 
-srun accelerate launch --num_processes 1 --config_file configs/deepspeed_zero3.yaml train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
+python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
+
+export CUDA_VISIBLE_DEVICES=0
+trl vllm-serve --model google/gemma-3-1b-it &
+
+sleep 120
+echo "Starting GRPO training"
+
+export CUDA_VISIBLE_DEVICES=1
+ACCELERATE_LOG_LEVEL=info \
+    accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
+    train/rule_based_grpo.py --config reciepes/rule_based_grpo.yaml
+

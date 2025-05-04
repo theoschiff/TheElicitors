@@ -2,7 +2,7 @@
 #SBATCH --chdir /home/barghorn/TheElicitors
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:3
+#SBATCH --gres=gpu:4
 #SBATCH --partition h100
 #SBATCH --time=10:0:0
 #SBATCH --account sma-llm-botafogo
