@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --chdir /home/barghorn/TheElicitors
+#SBATCH --chdir /home/schiffer/MA4/RL_project/TheElicitors
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
 #SBATCH --partition gpu
 #SBATCH --time=10:0:0
-#SBATCH --account master
+# #SBATCH --account master
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
 #SBATCH --mem 128G
