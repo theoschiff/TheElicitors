@@ -1,0 +1,9 @@
+vllm
+transformers
+datasets
+deepspeed
+accelerate
+trl
+rewards
+dataclasses
+lighteval
