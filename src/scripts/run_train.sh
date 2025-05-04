@@ -1,23 +1,24 @@
 #!/bin/bash
 #SBATCH --chdir /home/barghorn/TheElicitors
 #SBATCH --ntasks-per-node=1  
-#SBATCH --nodes=4
-#SBATCH --gres=gpu:4
-#SBATCH --partition h100
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:2
+#SBATCH --partition gpu
 #SBATCH --time=10:0:0
-#SBATCH --qos=long
 #SBATCH --account master
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
-#SBATCH --mem 256G
+#SBATCH --mem 128G
 
 echo STARTING AT `date`
 
 module load gcc cuda  openmpi python hdf5/1.14.3-mpi  py-scipy
 
 cd ..
-source ??
-cd ??
+cd MasterProject/
+source venvs/train/bin/activate
+cd ..
+cd TheElicitors/src
 
 nvcc --version
 
@@ -25,7 +26,7 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-GPUS_PER_NODE=4
+GPUS_PER_NODE=2
 # so processes know who to talk to
 MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 MASTER_PORT=6000
@@ -49,4 +50,4 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 
 export HF_HOME="/scratch/barghorn/.cache"
 
-srun accelerate launch --num_processes 3 --config_file configs/accelerate_configs/deepspeed_zero3.yaml scripts/run_r1_grpo.py --config receipes/grpo-qwen-2.5-3b-deepseek-r1-countdown.yaml
+srun accelerate launch --num_processes 1 --config_file configs/deepspeed_zero3.yaml train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml

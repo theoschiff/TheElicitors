@@ -1,3 +1,5 @@
+##NO NEED TO RUN THIS ON THE CLUSTER
+
 echo STARTING AT `date`
 
 nvidia-smi
