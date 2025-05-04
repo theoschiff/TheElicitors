@@ -17,7 +17,8 @@ cd src/evaluation
 NUM_GPUS=1
 
 MODELS=(
-    google/gemma-3-1b-it
+    # google/gemma-3-1b-it
+    Jeremmmyyyyy/gemma-3-1b-Math
 )
 
 GENERATION_SIZES=(

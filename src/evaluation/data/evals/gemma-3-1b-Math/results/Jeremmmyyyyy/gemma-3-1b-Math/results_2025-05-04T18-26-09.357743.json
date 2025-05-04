@@ -1,0 +1,115 @@
+{
+  "config_general": {
+    "lighteval_sha": "?",
+    "num_fewshot_seeds": 1,
+    "override_batch_size": -1,
+    "max_samples": null,
+    "job_id": 0,
+    "start_time": 27109.611250959,
+    "end_time": 27567.184623132,
+    "total_evaluation_time_secondes": "457.573372173003",
+    "model_name": "Jeremmmyyyyy/gemma-3-1b-Math",
+    "model_sha": "",
+    "model_dtype": null,
+    "model_size": null,
+    "generation_parameters": {
+      "early_stopping": null,
+      "repetition_penalty": null,
+      "frequency_penalty": null,
+      "length_penalty": null,
+      "presence_penalty": null,
+      "max_new_tokens": 8192,
+      "min_new_tokens": null,
+      "seed": null,
+      "stop_tokens": null,
+      "temperature": 0.6,
+      "top_k": null,
+      "min_p": null,
+      "top_p": 0.95,
+      "truncate_prompt": null,
+      "response_format": null
+    }
+  },
+  "results": {
+    "custom|U_math|0": {
+      "extractive_match": 0.13,
+      "extractive_match_stderr": 0.011216347516589599
+    },
+    "all": {
+      "extractive_match": 0.13,
+      "extractive_match_stderr": 0.011216347516589599
+    }
+  },
+  "versions": {
+    "custom|U_math|0": 1
+  },
+  "config_tasks": {
+    "custom|U_math": {
+      "name": "U_math",
+      "prompt_function": "u_math_prompt_fn",
+      "hf_repo": "Jeremmmyyyyy/U_math_lighteval",
+      "hf_subset": "default",
+      "metric": [
+        {
+          "metric_name": "extractive_match",
+          "higher_is_better": true,
+          "category": "3",
+          "use_case": "1",
+          "sample_level_fn": "sample_level_fn",
+          "corpus_level_fn": "mean"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "test"
+      ],
+      "trust_dataset": false,
+      "evaluation_splits": [
+        "test"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": null,
+      "generation_size": 8192,
+      "generation_grammar": null,
+      "stop_sequence": [],
+      "num_samples": null,
+      "suite": [
+        "custom"
+      ],
+      "original_num_docs": 900,
+      "effective_num_docs": 900,
+      "must_remove_duplicate_docs": false,
+      "version": 1
+    }
+  },
+  "summary_tasks": {
+    "custom|U_math|0": {
+      "hashes": {
+        "hash_examples": "783f51082ffbcac9",
+        "hash_full_prompts": "d9e46e7904b3af46",
+        "hash_input_tokens": "6fdf1fea6c969f73",
+        "hash_cont_tokens": "a26dca6c7de4fc6c"
+      },
+      "truncated": 0,
+      "non_truncated": 900,
+      "padded": 0,
+      "non_padded": 900,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    }
+  },
+  "summary_general": {
+    "hashes": {
+      "hash_examples": "248d8a215dda9f34",
+      "hash_full_prompts": "b80141c468d2a30c",
+      "hash_input_tokens": "455040634c80cbc8",
+      "hash_cont_tokens": "2a6463877a4c8930"
+    },
+    "truncated": 0,
+    "non_truncated": 900,
+    "padded": 0,
+    "non_padded": 900,
+    "num_truncated_few_shots": 0
+  }
+}
