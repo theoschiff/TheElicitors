@@ -51,11 +51,6 @@ def get_checkpoint(training_args: GRPOConfig):
 def grpo_function(
     model_args: ModelConfig, script_args: ScriptArguments, training_args: GRPOConfig
 ):
-    #########################
-    # Log parameters
-    #########################
-    logger.info(f"Model parameters {model_args}")
-    logger.info(f"Training/evaluation parameters {training_args}")
 
     ################
     # Load tokenizer
@@ -121,6 +116,13 @@ def grpo_function(
       eval_dataset=test_dataset,
       peft_config=get_peft_config(model_args),
     )
+    
+        #########################
+    # Log parameters
+    #########################
+    if trainer.accelerator.is_main_process:
+        logger.info(f"Model parameters {model_args}")
+        logger.info(f"Training/evaluation parameters {training_args}")
 
 
     ###############
