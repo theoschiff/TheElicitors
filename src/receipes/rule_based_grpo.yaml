@@ -4,7 +4,7 @@ model_revision: main
 torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
-tf32: true
+tf32: false
 output_dir: /scratch/barghorn/Qwen/Qwen3-0.6B-Base
 
 # Dataset arguments
