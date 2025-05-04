@@ -1,0 +1,9 @@
+vllm
+transformers==4.51.3
+datasets
+deepspeed
+accelerate
+trl
+rewards
+dataclasses
+lighteval
