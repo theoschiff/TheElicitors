@@ -1,6 +1,9 @@
 import re
 import os
 import random
+import openai
+import torch
+from typing import List
  
 def format_reward_func(completions, target, **kwargs):
     """
@@ -94,3 +97,66 @@ def equation_reward_func(completions, target, nums, **kwargs):
             # If evaluation fails, reward is 0
             rewards.append(0.0) 
     return rewards
+
+def make_gold_answer_logprob_reward(
+    api_base: str,
+    model_name:    str,
+    tokenizer,
+    batch_size:    int = 8,
+):
+    """
+    Returns a reward function that takes:
+      - prompts: List[str]
+      - completions: List[str]    (with <think>…</think><answer>…</answer>)
+      - target: List[str]
+    and returns List[float] of log-probs for target under the current policy
+    served by your vLLM HTTP server.
+    """
+    # configure OpenAI-compatible client
+    openai.api_base = api_base.rstrip("/") + "/v1"
+    openai.api_key  = ""
+    
+    def reward_fn(
+        prompts:      List[str],
+        completions:  List[str],
+        target:  List[str],
+        **kwargs,     # any extra dataset fields are ignored
+    ) -> List[float]:
+        rewards: List[float] = []
+        
+        # process in batches
+        for i in range(0, len(prompts), batch_size):
+            slice_end = i + batch_size
+            ctxs    = []
+            answers = target[i:slice_end]
+            
+            # build each context = prompt + reasoning + "</think>\n"
+            for prompt, completion in zip(prompts[i:slice_end], completions[i:slice_end]):
+                m = re.search(r"<think>([\s\S]*?)</think>", completion)
+                reasoning = m.group(1) if m else ""
+                ctxs.append(prompt + reasoning + "</think>\n") #TODO reuse the same format as generate_r1_prompt in train_grpo.py
+            
+            # call vLLM in one go
+            resp = openai.Completion.create(
+                model      = model_name,
+                prompt     = ctxs,    # list of strings
+                max_tokens = 0,       # no new tokens
+                echo       = True,    # return logprobs for all input tokens
+                logprobs   = 0,       # full token_logprobs
+            )
+            
+            # extract per-example rewards
+            for choice, ans in zip(resp.choices, answers):
+                token_logprobs = choice.logprobs.token_logprobs  # List[float]
+                
+                # how many logprobs correspond to ans?
+                ans_ids = tokenizer(ans,
+                                    add_special_tokens=False).input_ids
+                n = len(ans_ids)
+                
+                # sum the last n entries
+                rewards.append(sum(token_logprobs[-n:]))
+        
+        return rewards
+    
+    return reward_fn
