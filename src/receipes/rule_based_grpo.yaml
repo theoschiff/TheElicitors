@@ -4,8 +4,10 @@ model_revision: main
 torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
-tf32: true
-output_dir: /scratch/barghorn/google/gemma-3-1b-it
+tf32: false
+# set in the terminal before training:
+# export HF_USERNAME=your_hf_username 
+output_dir: /scratch/${HF_USERNAME}/google/gemma-3-1b-it
 
 # Dataset arguments
 dataset_id_or_path: Jiayi-Pan/Countdown-Tasks-3to4
