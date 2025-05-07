@@ -1,6 +1,13 @@
 import re
 import os
 import random
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import nltk
+from nltk.corpus import cmudict
+from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
+
  
 def format_reward_func(completions, target, **kwargs):
     """
@@ -93,4 +100,86 @@ def equation_reward_func(completions, target, nums, **kwargs):
       except Exception:
             # If evaluation fails, reward is 0
             rewards.append(0.0) 
+    return rewards
+
+    import re
+
+
+
+
+def count_syllables(word):
+    """Count syllables in a word using cmudict or fallback to simple rule"""
+    word = word.lower()
+    if word in d:
+        return max([len([y for y in x if y[-1].isdigit()]) for x in d[word]])
+    else:
+        # fallback: estimate syllables by vowel groups
+        return len(re.findall(r'[aeiouy]+', word.lower()))
+
+def count_total_syllables(text):
+    return sum(count_syllables(w) for w in re.findall(r'\b\w+\b', text))
+
+
+def rhyme_score(poem):
+    """Score based on how many line pairs rhyme"""
+    lines = [line.strip() for line in poem.strip().split("\n") if line.strip()]
+    rhymes = 0
+    for i in range(len(lines) - 1):
+        w1 = last_word(lines[i])
+        w2 = last_word(lines[i + 1])
+        if w1 in d and w2 in d:
+            if any(p1[-1] == p2[-1] for p1 in d[w1] for p2 in d[w2]):
+                rhymes += 1
+    return rhymes / max(1, len(lines) - 1)
+
+
+
+def embedding_similarity(text, reference):
+    """Use embedding model to compute semantic similarity"""
+    emb = embed_model.encode([text, reference])
+    sim = cosine_similarity([emb[0]], [emb[1]])[0][0]
+    return sim
+
+def creative_writing_poetry_reward(completions, targets, **kwargs):
+    """
+    Reward function for poetry generation.
+    Returns:
+        list[float]: scores between 0 and 1
+    """
+
+    nltk.download("cmudict")
+    
+    # Load once for embedding similarity
+    embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+    d = cmudict.dict()
+
+    rewards = []
+
+    for completion, reference in zip(completions, targets):
+        try:
+            # Extract just the poetic part (optional: assume inside <answer>...</answer>)
+            match = re.search(r"<answer>(.*?)</answer>", completion, re.DOTALL)
+            if match:
+                poem = match.group(1).strip()
+            else:
+                poem = completion.strip()
+
+            rhyme = rhyme_score(poem)
+            syllables = count_total_syllables(poem)
+
+            semantic = embedding_similarity(poem, reference)
+
+
+            # Combine rewards (tune weights as needed)
+            total_reward = (
+                0.5 * semantic
+                0.25 * rhyme
+                0.25 * syllables
+            )
+
+            rewards.append(total_reward)
+        except Exception as e:
+            print(f"Reward error: {e}")
+            rewards.append(0.0)
+
     return rewards
