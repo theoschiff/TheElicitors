@@ -1,12 +1,11 @@
 import re
 import os
 import random
-import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import nltk
 from nltk.corpus import cmudict
 from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 
  
 def format_reward_func(completions, target, **kwargs):
@@ -104,34 +103,104 @@ def equation_reward_func(completions, target, nums, **kwargs):
 
     import re
 
-
-
-
 def count_syllables(word):
     """Count syllables in a word using cmudict or fallback to simple rule"""
+    try:
+        nltk.data.find("corpora/cmudict")
+    except LookupError:
+        nltk.download("cmudict")
+
     word = word.lower()
+    d = cmudict.dict()
+    
     if word in d:
         return max([len([y for y in x if y[-1].isdigit()]) for x in d[word]])
     else:
         # fallback: estimate syllables by vowel groups
         return len(re.findall(r'[aeiouy]+', word.lower()))
 
-def count_total_syllables(text):
-    return sum(count_syllables(w) for w in re.findall(r'\b\w+\b', text))
+import re
+import nltk
+from nltk.corpus import cmudict
 
+def count_syllables(word):
+    """Count syllables in a word using cmudict or fallback to simple rule"""
+    try:
+        nltk.data.find("corpora/cmudict")
+    except LookupError:
+        nltk.download("cmudict")
+    d = cmudict.dict()
+    word = word.lower()
+    if word in d:
+        # each phoneme ending in a digit is a vowel sound
+        return max(len([ph for ph in pron_list if ph[-1].isdigit()]) 
+                   for pron_list in d[word])
+    else:
+        # fallback: count vowel groups
+        return len(re.findall(r'[aeiouy]+', word))
 
-def rhyme_score(poem):
-    """Score based on how many line pairs rhyme"""
-    lines = [line.strip() for line in poem.strip().split("\n") if line.strip()]
-    rhymes = 0
-    for i in range(len(lines) - 1):
-        w1 = last_word(lines[i])
-        w2 = last_word(lines[i + 1])
-        if w1 in d and w2 in d:
-            if any(p1[-1] == p2[-1] for p1 in d[w1] for p2 in d[w2]):
-                rhymes += 1
-    return rhymes / max(1, len(lines) - 1)
+def total_syllables(text):
+    """Count total syllables in a piece of text"""
+    words = re.findall(r'\b\w+\b', text.lower())
+    return sum(count_syllables(w) for w in words)
 
+def rhymes(a, b):
+    """Simple rhyme test: compare last stressed vowel onward (using cmudict)"""
+    d = cmudict.dict()
+    def rhyme_key(word):
+        phones = d.get(word.lower(), [])
+        if not phones: return None
+        # take the last vowel+stress onward
+        for pron in phones:
+            for i in range(len(pron)-1, -1, -1):
+                if pron[i][-1].isdigit():
+                    return tuple(pron[i:])
+        return None
+    ka, kb = rhyme_key(a), rhyme_key(b)
+    return ka is not None and ka == kb
+
+def classify_form(lines):
+    """Detect sonnet, haiku, limerick—or free verse otherwise."""
+    syls = [ total_syllables(line) for line in lines ]
+
+    print(syls)
+
+    # Sonnet: 14 lines of exactly 10 syllables (discarding lines for now since we give only a part to generate)
+    if all(s == 10 for s in syls):
+        return "sonnet"
+
+    # Haiku: 3 lines of 5-7-5 (discarding for now since we give only a part to generate)
+    if syls == [5, 7, 5]:
+        return "haiku"
+
+    # Limerick: 5 lines, approx [8–9,8–9,5–6,5–6,8–9] + AABBA rhyme
+    #if len(lines) == 5: (discarding it for now since we give only a part to generate)
+    target = [9, 9, 6, 6, 9]
+    if all(abs(s - t) <= 1 for s, t in zip(syls, target)) \
+        and rhymes(lines[0].split()[-1], lines[1].split()[-1]) \
+        and rhymes(lines[0].split()[-1], lines[4].split()[-1]) \
+        and rhymes(lines[2].split()[-1], lines[3].split()[-1]):
+        return "limerick"
+
+    # Everything else: free verse
+    return "free_verse"
+
+def reward_poem_form(poem: str) -> int:
+    """
+    Returns 1 if the poem matches its detected form (based on rhymes and syllabes):
+      - sonnet, haiku, or limerick structural rules (We should def add more later like Tanka, Sijo, Acrostic etc (found on masterclass website))
+      - OR free-verse (no stricter constraint)
+    Otherwise returns 0.
+    """
+    # split into non-blank, stripped lines
+    lines = [ln.strip() for ln in poem.split("\n") if ln.strip()]
+    form = classify_form(lines)
+
+    # we only reject if it claims a fixed form but fails its pattern
+    if form in {"sonnet", "haiku", "limerick", "free_verse"}:
+        return 1
+
+    return 0
 
 
 def embedding_similarity(text, reference):
@@ -147,11 +216,9 @@ def creative_writing_poetry_reward(completions, targets, **kwargs):
         list[float]: scores between 0 and 1
     """
 
-    nltk.download("cmudict")
-    
     # Load once for embedding similarity
     embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-    d = cmudict.dict()
+   
 
     rewards = []
 
@@ -171,11 +238,7 @@ def creative_writing_poetry_reward(completions, targets, **kwargs):
 
 
             # Combine rewards (tune weights as needed)
-            total_reward = (
-                0.5 * semantic
-                0.25 * rhyme
-                0.25 * syllables
-            )
+            total_reward = 0.5 * semantic + 0.25 * rhyme +0.25 * syllables
 
             rewards.append(total_reward)
         except Exception as e:
@@ -183,3 +246,44 @@ def creative_writing_poetry_reward(completions, targets, **kwargs):
             rewards.append(0.0)
 
     return rewards
+
+
+def main_rewards():
+    # test on a fixed snippet
+    test_text = (
+        "The fields were bleak and sodden. Not a wing\n"
+        "Or note enlivened the depressing wood,\n"
+        "A soiled and sullen, stubborn snowdrift stood\n"
+        "Beside the roadway. Winds came muttering"
+    )
+
+    print("Fixed Test Snippet ===")
+    print(test_text, "\n")
+    print("Detected form: ", classify_form(test_text.splitlines()))
+    print("Reward (0/1):", reward_poem_form(test_text), "\n")
+
+    # generate a poem with gemma 1b 
+    model_id = "google/gemma-3-1b-it"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model     = AutoModelForCausalLM.from_pretrained(model_id).eval()
+
+    prompt = "Write a short poem about the moon:\n<answer>"
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+
+    with torch.no_grad():
+        gen_output = model.generate(
+            input_ids,
+            max_new_tokens=100,
+            do_sample=True,
+            temperature=0.9
+        )
+    generated = tokenizer.decode(gen_output[0], skip_special_tokens=True)
+
+    print("=== Generated Poem ===")
+    print(generated, "\n")
+    print("Detected form: ", classify_form(generated.splitlines()))
+    print("Reward (0/1):", reward_poem(generated))
+
+
+if __name__ == "__main__":
+    main_rewards()
