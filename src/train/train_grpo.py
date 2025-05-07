@@ -13,6 +13,7 @@ from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
 import openai
 import re
 from rewards import format_reward_func, equation_reward_func, make_gold_answer_logprob_reward
+from data_utils import generate_r1_prompt
 
 
 ########################
@@ -84,25 +85,8 @@ def grpo_function(
     # Prepare and format dataset
     #####################
 
-    # gemerate r1 prompt with a prefix for the model to already start with the thinking process
-    def generate_r1_prompt(numbers, target):
-        r1_prefix = [{
-            "role": "system",
-            "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
-          },
-          { 
-            "role": "user",
-            "content": f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) one or multiple times but each number can only be used once. Show your work in <think> </think> tags. And return the final equation in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>. Think step by step inside <think> tags."
-          },
-          {
-            "role": "assistant",
-            "content": "Let me solve this step by step.\n<think>"
-          }]
-        return {"prompt": tokenizer.apply_chat_template(r1_prefix, tokenize=False, continue_final_message=True), 
-                "target": target, "nums": numbers}
-
     # convert our dataset to the r1 prompt
-    dataset = dataset.map(lambda x: generate_r1_prompt(x["nums"], x["target"]))
+    dataset = dataset.map(lambda x: generate_r1_prompt(tokenizer, x["nums"], x["target"]))
 
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)
@@ -111,7 +95,7 @@ def grpo_function(
     test_dataset = train_test_split["test"]
 
     #########################
-    # Instantiate DPO trainer
+    # Instantiate GRPO trainer
     #########################
     reward_funcs = [format_reward_func, equation_reward_func]
 
@@ -120,7 +104,7 @@ def grpo_function(
             model_name    = model_args.model_name_or_path,
             api_base   = script_args.vllm_api_base,
             tokenizer  = tokenizer,
-            batch_size    = 8          # tune for your GPU / throughput
+            batch_size    = model_args.per_device_train_batch_size # 8 # tune for your GPU / throughput
         )
         reward_funcs.append(gold_logprob_reward)
 

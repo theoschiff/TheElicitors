@@ -5,21 +5,18 @@
 #SBATCH --time=10:0:0
 #SBATCH --cpus-per-task=32
 #SBATCH --mem 64G
+#SBTACH --account master
+
+#make sure that you are running from the root directory
 
 echo STARTING AT `date`
 
 module load gcc cuda openmpi python
 
-# Get absolute path to the repo root regardless of where the script is run
-REPO_ROOT=$(realpath "$(dirname "$0")/..")
-SRC_DIR="$REPO_ROOT/src"
-VENV_PATH="$REPO_ROOT/venvs/train"
-
 # Activate virtualenv
-source "$VENV_PATH/bin/activate"
-
-# Move to source directory
-cd "$SRC_DIR"
+#source ~/home/dechilla/TheElicitors/venvs/train/bin/activate
+source /venvs/train/bin/activate
+cd src
 
 nvcc --version
 
@@ -29,7 +26,7 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export TOKENIZERS_PARALLELISM=true
 export HF_HUB_ENABLE_HF_TRANSFER=1
-export HF_HOME="/scratch/barghorn/.cache"
+export HF_HOME="/scratch/dechilla/.cache"
 
 # Verify Torch + CUDA versions
 python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
