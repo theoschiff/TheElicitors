@@ -1,9 +1,11 @@
 import re
 import os
 import random
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch 
 import nltk
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from nltk.corpus import cmudict
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 # from sentence_transformers import SentenceTransformer
 
@@ -101,7 +103,7 @@ def equation_reward_func(completions, target, nums, **kwargs):
             rewards.append(0.0) 
     return rewards
 
-    import re
+
 
 def count_syllables(word):
     """Count syllables in a word using cmudict or fallback to simple rule"""
@@ -118,26 +120,6 @@ def count_syllables(word):
     else:
         # fallback: estimate syllables by vowel groups
         return len(re.findall(r'[aeiouy]+', word.lower()))
-
-import re
-import nltk
-from nltk.corpus import cmudict
-
-def count_syllables(word):
-    """Count syllables in a word using cmudict or fallback to simple rule"""
-    try:
-        nltk.data.find("corpora/cmudict")
-    except LookupError:
-        nltk.download("cmudict")
-    d = cmudict.dict()
-    word = word.lower()
-    if word in d:
-        # each phoneme ending in a digit is a vowel sound
-        return max(len([ph for ph in pron_list if ph[-1].isdigit()]) 
-                   for pron_list in d[word])
-    else:
-        # fallback: count vowel groups
-        return len(re.findall(r'[aeiouy]+', word))
 
 def total_syllables(text):
     """Count total syllables in a piece of text"""
@@ -159,9 +141,23 @@ def rhymes(a, b):
     ka, kb = rhyme_key(a), rhyme_key(b)
     return ka is not None and ka == kb
 
-def classify_form(lines):
+def extract_answer_text(generated_text):
+    match = re.search(r"<answer>(.*?)</answer>", generated_text, re.DOTALL)
+    return match.group(1).strip() if match else generated_text
+
+def classify_form(poem):
     """Detect sonnet, haiku, limerick—or free verse otherwise."""
-    syls = [ total_syllables(line) for line in lines ]
+
+    # ensure poem is a string
+    if isinstance(poem, list):
+        poem = "\n".join(poem)
+
+    # if generated output is given and <answer></answer> token are given, then only keep what's in between
+    poem_only = extract_answer_text(poem)
+
+    lines = [line.strip() for line in poem_only.splitlines() if line.strip()]
+
+    syls = [ total_syllables(line) for line in lines]
 
     print(syls)
 
@@ -177,15 +173,15 @@ def classify_form(lines):
     #if len(lines) == 5: (discarding it for now since we give only a part to generate)
     target = [9, 9, 6, 6, 9]
     if all(abs(s - t) <= 1 for s, t in zip(syls, target)) \
-        and rhymes(lines[0].split()[-1], lines[1].split()[-1]) \
-        and rhymes(lines[0].split()[-1], lines[4].split()[-1]) \
-        and rhymes(lines[2].split()[-1], lines[3].split()[-1]):
+        and rhymes(poem_only[0].split()[-1], poem_only[1].split()[-1]) \
+        and rhymes(poem_only[0].split()[-1], poem_only[4].split()[-1]) \
+        and rhymes(poem_only[2].split()[-1], poem_only[3].split()[-1]):
         return "limerick"
 
     # Everything else: free verse
     return "free_verse"
 
-def reward_poem_form(poem: str) -> int:
+def reward_poem_form(ref_poem, gen_poem: str) -> int:
     """
     Returns 1 if the poem matches its detected form (based on rhymes and syllabes):
       - sonnet, haiku, or limerick structural rules (We should def add more later like Tanka, Sijo, Acrostic etc (found on masterclass website))
@@ -193,59 +189,22 @@ def reward_poem_form(poem: str) -> int:
     Otherwise returns 0.
     """
     # split into non-blank, stripped lines
-    lines = [ln.strip() for ln in poem.split("\n") if ln.strip()]
-    form = classify_form(lines)
+    ref_form = classify_form(ref_poem)
+
+    # split into non-blank, stripped lines
+    gen_form = classify_form(gen_poem)
 
     # we only reject if it claims a fixed form but fails its pattern
-    if form in {"sonnet", "haiku", "limerick", "free_verse"}:
-        return 1
-
-    return 0
+    return 1 if ref_form == gen_form else 0
 
 
 def embedding_similarity(text, reference):
     """Use embedding model to compute semantic similarity"""
+    embed_model = SentenceTransformer('all-MiniLM-L6-v2')
     emb = embed_model.encode([text, reference])
     sim = cosine_similarity([emb[0]], [emb[1]])[0][0]
     return sim
 
-def creative_writing_poetry_reward(completions, targets, **kwargs):
-    """
-    Reward function for poetry generation.
-    Returns:
-        list[float]: scores between 0 and 1
-    """
-
-    # Load once for embedding similarity
-    embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-   
-
-    rewards = []
-
-    for completion, reference in zip(completions, targets):
-        try:
-            # Extract just the poetic part (optional: assume inside <answer>...</answer>)
-            match = re.search(r"<answer>(.*?)</answer>", completion, re.DOTALL)
-            if match:
-                poem = match.group(1).strip()
-            else:
-                poem = completion.strip()
-
-            rhyme = rhyme_score(poem)
-            syllables = count_total_syllables(poem)
-
-            semantic = embedding_similarity(poem, reference)
-
-
-            # Combine rewards (tune weights as needed)
-            total_reward = 0.5 * semantic + 0.25 * rhyme +0.25 * syllables
-
-            rewards.append(total_reward)
-        except Exception as e:
-            print(f"Reward error: {e}")
-            rewards.append(0.0)
-
-    return rewards
 
 
 def main_rewards():
@@ -259,13 +218,12 @@ def main_rewards():
 
     print("Fixed Test Snippet ===")
     print(test_text, "\n")
-    print("Detected form: ", classify_form(test_text.splitlines()))
-    print("Reward (0/1):", reward_poem_form(test_text), "\n")
+    print("Detected form: ", classify_form(test_text))
 
     # generate a poem with gemma 1b 
-    model_id = "google/gemma-3-1b-it"
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model     = AutoModelForCausalLM.from_pretrained(model_id).eval()
+    model_name = "google/gemma-3-1b-it"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model     = AutoModelForCausalLM.from_pretrained(model_name).eval()
 
     prompt = "Write a short poem about the moon:\n<answer>"
     input_ids = tokenizer(prompt, return_tensors="pt").input_ids
@@ -281,8 +239,8 @@ def main_rewards():
 
     print("=== Generated Poem ===")
     print(generated, "\n")
-    print("Detected form: ", classify_form(generated.splitlines()))
-    print("Reward (0/1):", reward_poem(generated))
+    print("Detected form: ", classify_form(generated))
+    print("Reward (0/1):", reward_poem_form(test_text, generated))
 
 
 if __name__ == "__main__":
