@@ -21,6 +21,7 @@ class ScriptArguments:
     dataset_id_or_path: str = "Jiayi-Pan/Countdown-Tasks-3to4"
     dataset_splits: str = "train"
     tokenizer_name_or_path: str = None
+    task_type : str = "math"
 
 
 ########################
@@ -79,38 +80,65 @@ def grpo_function(
     # Prepare and format dataset
     #####################
 
+    if script_args.task_type == "math":
     # gemerate r1 prompt with a prefix for the model to already start with the thinking process
-    def generate_r1_prompt(numbers, target):
-        r1_prefix = [{
-            "role": "system",
-            "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
-          },
-          { 
-            "role": "user",
-            "content": f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) one or multiple times but each number can only be used once. Show your work in <think> </think> tags. And return the final equation in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>. Think step by step inside <think> tags."
-          },
-          {
-            "role": "assistant",
-            "content": "Let me solve this step by step.\n<think>"
-          }]
-        return {"prompt": tokenizer.apply_chat_template(r1_prefix, tokenize=False, continue_final_message=True), "target": target, "nums": numbers}
+        def generate_r1_prompt(numbers, target):
+            r1_prefix = [{
+                "role": "system",
+                "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
+            },
+            { 
+                "role": "user",
+                "content": f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) one or multiple times but each number can only be used once. Show your work in <think> </think> tags. And return the final equation in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>. Think step by step inside <think> tags."
+            },
+            {
+                "role": "assistant",
+                "content": "Let me solve this step by step.\n<think>"
+            }]
+            return {"prompt": tokenizer.apply_chat_template(r1_prefix, tokenize=False, continue_final_message=True), "target": target, "nums": numbers}
 
-    # convert our dataset to the r1 prompt
-    dataset = dataset.map(lambda x: generate_r1_prompt(x["nums"], x["target"]))
+        # convert our dataset to the r1 prompt
+        dataset = dataset.map(lambda x: generate_r1_prompt(x["nums"], x["target"]))
+        
+    elif script_args.task_type == "poetry":
+        def generate_r1_prompt(author, title, poem_start):
+            r1_prefix = [{
+                "role": "system",
+                "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
+            },
+            { 
+                "role": "user",
+                "content": f"Using the author name : {author}, the title : {title} and the start of an existing poem that is as follows : {poem_start}, create a new ending for this poem. You need to take into account the form, the rhymes, the syllables and theme to create a new realistic ending. Show your work in <think> </think> where you are allowed to thinka bout structure, rhymes, etc. And return the final poem ending in <answer> </answer> tags. Think step by step inside <think> tags."
+            },
+            {
+                "role": "assistant",
+                "content": "Let me write a poem step by step.\n<think>"
+            }]
+            return {"prompt": tokenizer.apply_chat_template(r1_prefix, tokenize=False, continue_final_message=True), "author": author, "title": title, "poem_start": poem_start}
+
+        # convert our dataset to the r1 prompt
+        dataset = dataset.map(lambda x: generate_r1_prompt(x["author"], x["title"], x["poem_start"]))
 
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)
 
     train_dataset = train_test_split["train"]
     test_dataset = train_test_split["test"]
+    
+    logger.info(f"Train example : {train_dataset[0]}")
 
     #########################
     # Instantiate DPO trainer
     #########################
+    
+    if script_args.task_type == "math":
+        reward_functions = [format_reward_func, equation_reward_func]
+    elif script_args.task_type == "poetry":
+        reward_functions = [format_reward_func, equation_reward_func]
 
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,
-      reward_funcs=[format_reward_func, equation_reward_func],
+      reward_funcs=reward_functions,
       args=training_args,
       train_dataset=train_dataset,
       eval_dataset=test_dataset,
