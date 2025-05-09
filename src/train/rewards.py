@@ -7,6 +7,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from nltk.corpus import cmudict
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from typing import List
 # from sentence_transformers import SentenceTransformer
 
  
@@ -206,6 +207,26 @@ def embedding_similarity(text, reference):
     return sim
 
 
+def global_poetry_reward_func(
+        completions:  List[str],
+        gold_answers:  List[str], #TODO add to dataset
+        **kwargs,     # any extra dataset fields are ignored
+    ) -> List[float]:
+        rewards: List[float] = []
+        
+        for completion, gold_answer in zip(completions, gold_answers):
+            
+            extracted_answer = extract_answer_text(completion)
+            
+            similarity = embedding_similarity(completion, gold_answer)
+            
+            form = reward_poem_form(gold_answer, extracted_answer)
+            
+            reward = 0.4 * similarity + 0.6 * form
+            
+            rewards.append(reward)
+        
+        return rewards
 
 def main_rewards():
     # test on a fixed snippet

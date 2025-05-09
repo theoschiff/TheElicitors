@@ -10,7 +10,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, equation_reward_func
+from rewards import format_reward_func, equation_reward_func, global_poetry_reward_func
 
 
 ########################
@@ -134,7 +134,7 @@ def grpo_function(
     if script_args.task_type == "math":
         reward_functions = [format_reward_func, equation_reward_func]
     elif script_args.task_type == "poetry":
-        reward_functions = [format_reward_func, equation_reward_func]
+        reward_functions = [format_reward_func, global_poetry_reward_func]
 
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,
