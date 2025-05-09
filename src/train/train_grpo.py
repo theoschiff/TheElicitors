@@ -27,6 +27,7 @@ class ScriptArguments:
 
     use_logprob_reward: bool = True
     vllm_api_base: str = "http://localhost:8000"
+    normalization: str = "token-level"
 
 
 ########################
@@ -105,8 +106,9 @@ def grpo_function(
             model_name    = model_args.model_name_or_path,
             api_base   = script_args.vllm_api_base,
             tokenizer  = tokenizer,
-            batch_size    = model_args.per_device_train_batch_size # 8 # tune for your GPU / throughput
-        )
+            batch_size    = model_args.per_device_train_batch_size, # 8 # tune for your GPU / throughput
+            normalization = script_args.normalization
+        )   
         reward_funcs.append(gold_logprob_reward)
 
     trainer = GRPOTrainer(

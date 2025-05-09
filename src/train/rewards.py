@@ -103,6 +103,7 @@ def make_gold_answer_logprob_reward(
     model_name:    str,
     tokenizer,
     batch_size:    int = 8,
+    normalization: str = "token-level",
 ):
     """
     Returns a reward function that takes:
@@ -154,10 +155,23 @@ def make_gold_answer_logprob_reward(
                 ans_ids = tokenizer("<answer>" + gold_answer + "</answer>",
                                     add_special_tokens=False).input_ids
                 n = len(ans_ids)
-                
-                # sum the last n entries
-                rewards.append(sum(token_logprobs[-n:]))
-        
+                reward = sum(token_logprobs[-n:])
+
+                # Apply token-level normalization
+                if normalization == "token-level":
+                    reward /= n
+                rewards.append(reward)
+
+        # Apply batch-level normalization
+        if normalization == "z-score":
+            mean_reward = sum(rewards) / len(rewards)
+            std_reward = (sum((r - mean_reward) ** 2 for r in rewards) / len(rewards)) ** 0.5
+            rewards = [(r - mean_reward) / std_reward for r in rewards]
+        elif normalization == "min-max":
+            min_reward = min(rewards)
+            max_reward = max(rewards)
+            rewards = [(r - min_reward) / (max_reward - min_reward) for r in rewards]
+
         return rewards
     
     return reward_fn
