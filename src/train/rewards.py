@@ -209,12 +209,12 @@ def embedding_similarity(text, reference):
 
 def global_poetry_reward_func(
         completions:  List[str],
-        gold_answers:  List[str], #TODO add to dataset
+        target:  List[str], #TODO add to dataset
         **kwargs,     # any extra dataset fields are ignored
     ) -> List[float]:
         rewards: List[float] = []
         
-        for completion, gold_answer in zip(completions, gold_answers):
+        for completion, gold_answer in zip(completions, target):
             
             extracted_answer = extract_answer_text(completion)
             

@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:3
-#SBATCH --partition h100
+#SBATCH --partition l40s
 #SBATCH --time=10:0:0
 #SBATCH --account sma-llm-botafogo
 #SBATCH --ntasks-per-node=1
@@ -45,5 +45,5 @@ echo "Starting GRPO training"
 export CUDA_VISIBLE_DEVICES=1,2
 ACCELERATE_LOG_LEVEL=info \
     accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
-    train/rule_based_grpo.py --config reciepes/rule_based_grpo.yaml
+    train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
 
