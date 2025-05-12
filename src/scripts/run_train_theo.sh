@@ -15,10 +15,8 @@ echo STARTING AT `date`
 module load gcc cuda openmpi python
 
 cd ..
-cd MasterProject/
-source venvs/train/bin/activate
-cd ..
-cd TheElicitors/src
+conda activate RL_env
+
 
 nvcc --version
 
@@ -32,7 +30,7 @@ export TOKENIZERS_PARALLELISM=true
 
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-export HF_HOME="/scratch/schifferli/.cache"
+export HF_HOME="/scratch/schifferlearning/.cache"
 
 python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
 
