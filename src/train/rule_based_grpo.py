@@ -101,14 +101,14 @@ def grpo_function(
         dataset = dataset.map(lambda x: generate_r1_prompt(x["nums"], x["target"]))
         
     elif script_args.task_type == "poetry":
-        def generate_r1_prompt(author, title, poem_start):
+        def generate_r1_prompt(author, title, poem_start, form):
             r1_prefix = [{
                 "role": "system",
                 "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
             },
             { 
                 "role": "user",
-                "content": f"Using the author name : {author}, the title : {title} and the start of an existing poem that is as follows : {poem_start}, create a new ending for this poem. You need to take into account the form, the rhymes, the syllables and theme to create a new realistic ending. Show your work in <think> </think> where you are allowed to thinka bout structure, rhymes, etc. And return the final poem ending in <answer> </answer> tags. Think step by step inside <think> tags."
+                "content": f"Using the author name : {author}, the title : {title} the start of an existing poem that is as follows : {poem_start}, create a new ending for this poem keeping it in the initial form of a {form}. You need to take into account the form, the rhymes, the syllables and theme to create a new realistic ending. Show your work in <think> </think> where you are allowed to think about structure, rhymes, etc. And return the final poem ending in <answer> </answer> tags. Think step by step inside <think> tags."
             },
             {
                 "role": "assistant",
@@ -117,7 +117,7 @@ def grpo_function(
             return {"prompt": tokenizer.apply_chat_template(r1_prefix, tokenize=False, continue_final_message=True), "author": author, "title": title, "poem_start": poem_start}
 
         # convert our dataset to the r1 prompt
-        dataset = dataset.map(lambda x: generate_r1_prompt(x["author"], x["title"], x["poem_start"]))
+        dataset = dataset.map(lambda x: generate_r1_prompt(x["author"], x["title"], x["poem_start"], x["form"]))
 
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)

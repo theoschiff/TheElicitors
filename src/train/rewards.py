@@ -147,56 +147,65 @@ def extract_answer_text(generated_text):
     return match.group(1).strip() if match else generated_text
 
 def classify_form(poem):
-    """Detect sonnet, haiku, limerick—or free verse otherwise."""
+    """Classify a poem's form based on line count and syllable patterns."""
+    lines = [line.strip() for line in poem.strip().splitlines() if line.strip()]
+    line_count = len(lines)
+    syllable_counts = [total_syllables(line) for line in lines]
 
-    # ensure poem is a string
-    if isinstance(poem, list):
-        poem = "\n".join(poem)
-
-    # if generated output is given and <answer></answer> token are given, then only keep what's in between
-    poem_only = extract_answer_text(poem)
-
-    lines = [line.strip() for line in poem_only.splitlines() if line.strip()]
-
-    syls = [ total_syllables(line) for line in lines]
-
-    print(syls)
-
-    # Sonnet: 14 lines of exactly 10 syllables (discarding lines for now since we give only a part to generate)
-    if all(s == 10 for s in syls):
-        return "sonnet"
-
-    # Haiku: 3 lines of 5-7-5 (discarding for now since we give only a part to generate)
-    if syls == [5, 7, 5]:
+    # Haiku: 3 lines with 5-7-5 syllable pattern
+    if line_count == 3 and syllable_counts == [5, 7, 5]:
         return "haiku"
 
-    # Limerick: 5 lines, approx [8–9,8–9,5–6,5–6,8–9] + AABBA rhyme
-    #if len(lines) == 5: (discarding it for now since we give only a part to generate)
-    target = [9, 9, 6, 6, 9]
-    if all(abs(s - t) <= 1 for s, t in zip(syls, target)) \
-        and rhymes(poem_only[0].split()[-1], poem_only[1].split()[-1]) \
-        and rhymes(poem_only[0].split()[-1], poem_only[4].split()[-1]) \
-        and rhymes(poem_only[2].split()[-1], poem_only[3].split()[-1]):
+    # Tanka: 5 lines with 5-7-5-7-7 syllable pattern
+    if line_count == 5 and syllable_counts == [5, 7, 5, 7, 7]:
+        return "tanka"
+
+    # Limerick: 5 lines with approximate syllable counts
+    if line_count == 5 and all(8 <= s <= 9 for s in syllable_counts[:2]) and all(5 <= s <= 6 for s in syllable_counts[2:4]) and 8 <= syllable_counts[4] <= 9:
         return "limerick"
 
-    # Everything else: free verse
+    # Sonnet: 14 lines
+    if line_count == 14:
+        return "sonnet"
+
+    # Quatrain: 4 lines with similar syllable counts
+    if line_count == 4 and max(syllable_counts) - min(syllable_counts) <= 2:
+        return "quatrain"
+
+    # Cinquain: 5 lines with specific syllable counts
+    if line_count == 5 and syllable_counts == [2, 4, 6, 8, 2]:
+        return "cinquain"
+
+    # Octave: 8 lines with similar syllable counts
+    if line_count == 8 and max(syllable_counts) - min(syllable_counts) <= 2:
+        return "octave"
+
+    # Decastich: 10 lines with similar syllable counts
+    if line_count == 10 and max(syllable_counts) - min(syllable_counts) <= 2:
+        return "decastich"
+
+    # Sestet: 6 lines with similar syllable counts
+    if line_count == 6 and max(syllable_counts) - min(syllable_counts) <= 2:
+        return "sestet"
+
+    # Couplet: 2 lines with similar syllable counts
+    if line_count == 2 and abs(syllable_counts[0] - syllable_counts[1]) <= 2:
+        return "couplet"
+
     return "free_verse"
 
-def reward_poem_form(ref_poem, gen_poem: str) -> int:
+def reward_poem_form(ref_poem, gen_poem: str, ref_form: str) -> int:
     """
     Returns 1 if the poem matches its detected form (based on rhymes and syllabes):
       - sonnet, haiku, or limerick structural rules (We should def add more later like Tanka, Sijo, Acrostic etc (found on masterclass website))
       - OR free-verse (no stricter constraint)
     Otherwise returns 0.
     """
-    # split into non-blank, stripped lines
-    ref_form = classify_form(ref_poem)
+    full_poem = ref_poem + gen_poem
+    full_form = classify_form(full_poem)
 
-    # split into non-blank, stripped lines
-    gen_form = classify_form(gen_poem)
-
-    # we only reject if it claims a fixed form but fails its pattern
-    return 1 if ref_form == gen_form else 0
+    return 1 if full_form == ref_form else 0
+    
 
 def embedding_similarity(text, reference, model):
     """Safely compute semantic similarity between two texts."""
