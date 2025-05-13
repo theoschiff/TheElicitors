@@ -13,6 +13,7 @@ from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
 from rewards import format_reward_func, equation_reward_func, sentence_similarity_reward_func
 from sentence_transformers import SentenceTransformer, util
 from functools import partial
+from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
 
 ########################
 # Custom dataclasses
@@ -22,7 +23,7 @@ class ScriptArguments:
     dataset_id_or_path: str = "Jiayi-Pan/Countdown-Tasks-3to4"
     dataset_splits: str = "train"
     tokenizer_name_or_path: str = None
-
+    task_type : str = "math"
 
 ########################
 # Setup logging
@@ -74,30 +75,19 @@ def grpo_function(
     # Load dataset from Hugging Face Hub
     dataset = load_dataset(script_args.dataset_id_or_path, split=script_args.dataset_splits)
     # select a random subset of 50k samples
-    dataset = dataset.shuffle(seed=42).select(range(50000))
+    if script_args.task_type == "math":
+        dataset = dataset.shuffle(seed=42).select(range(50000))
+    elif script_args.task_type == "poetry":
+        dataset = dataset.shuffle(seed=42)
 
     #####################
     # Prepare and format dataset
     #####################
-
-    # gemerate r1 prompt with a prefix for the model to already start with the thinking process
-    def generate_r1_prompt(numbers, target):
-        r1_prefix = [{
-            "role": "system",
-            "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
-          },
-          { 
-            "role": "user",
-            "content": f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) one or multiple times but each number can only be used once. Show your work in <think> </think> tags. And return the final equation in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>. Think step by step inside <think> tags."
-          },
-          {
-            "role": "assistant",
-            "content": "Let me solve this step by step.\n<think>"
-          }]
-        return {"prompt": tokenizer.apply_chat_template(r1_prefix, tokenize=False, continue_final_message=True), "target": target, "nums": numbers}
-
-    # convert our dataset to the r1 prompt
-    dataset = dataset.map(lambda x: generate_r1_prompt(x["nums"], x["target"]))
+    if script_args.task_type == "math":
+        dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
+    elif script_args.task_type == "poetry":
+        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
+    
 
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)
@@ -109,7 +99,12 @@ def grpo_function(
     print(f"Sentence_model on device: {sentence_model.device}")
 
     # Bind the model into the reward function
-    similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
+    
+    if script_args.task_type == "math":
+        reward_functions = [format_reward_func, equation_reward_func]
+    elif script_args.task_type == "poetry":
+        similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
+        reward_functions = [format_reward_func, similarity_reward]
 
     #########################
     # Instantiate DPO trainer
@@ -117,7 +112,7 @@ def grpo_function(
 
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,
-      reward_funcs=[format_reward_func, equation_reward_func],
+      reward_funcs=reward_functions,
       args=training_args,
       train_dataset=train_dataset,
       eval_dataset=test_dataset,
