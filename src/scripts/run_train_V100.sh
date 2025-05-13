@@ -1,39 +1,34 @@
 #!/bin/bash
-#SBATCH --chdir /home/barghorn/TheElicitors
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:4
-#SBATCH --partition h100
+#SBATCH --gres=gpu:2
 #SBATCH --time=10:0:0
-#SBATCH --account sma-llm-botafogo
-#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
-#SBATCH --mem 128G
+#SBATCH --mem 64G
+#SBTACH --account master
+
+#make sure that you are running from the root directory
 
 echo STARTING AT `date`
 
 module load gcc cuda openmpi python
 
-cd ..
-cd MasterProject/
-source venvs/train/bin/activate
-cd ..
-cd TheElicitors/src
+# Activate virtualenv
+#source ~/home/dechilla/TheElicitors/venvs/train/bin/activate
+source /venvs/train/bin/activate
+cd src
 
 nvcc --version
 
 nvidia-smi
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
 export TOKENIZERS_PARALLELISM=true
-
 export HF_HUB_ENABLE_HF_TRANSFER=1
+export HF_HOME="/scratch/dechilla/.cache"
 
-export HF_HOME="/scratch/barghorn/.cache"
-
+# Verify Torch + CUDA versions
 python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
 
 export CUDA_VISIBLE_DEVICES=0
@@ -42,8 +37,10 @@ trl vllm-serve --model google/gemma-3-1b-it &
 sleep 120
 echo "Starting GRPO training"
 
-export CUDA_VISIBLE_DEVICES=1,2
+
+# Training using the second GPU
+export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
-    accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
-    train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
+    accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 1 \
+    train/train_grpo.py --config reciepes/rule_based_grpo.yaml
 

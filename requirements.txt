@@ -7,3 +7,4 @@ trl
 rewards
 dataclasses
 lighteval
+torch
