@@ -10,8 +10,9 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, equation_reward_func
-
+from rewards import format_reward_func, equation_reward_func, sentence_similarity_reward_func
+from sentence_transformers import SentenceTransformer, util
+from functools import partial
 
 ########################
 # Custom dataclasses
@@ -103,6 +104,12 @@ def grpo_function(
 
     train_dataset = train_test_split["train"]
     test_dataset = train_test_split["test"]
+
+    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+    print(f"Sentence_model on device: {sentence_model.device}")
+
+    # Bind the model into the reward function
+    similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
 
     #########################
     # Instantiate DPO trainer

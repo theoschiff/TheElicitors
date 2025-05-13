@@ -1,10 +1,14 @@
-import re
 import os
 import random
 import openai
 import torch
 from typing import List
- 
+import re
+from sentence_transformers import util, SentenceTransformer
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from functools import partial
+
+
 def format_reward_func(completions, target, **kwargs):
     """
     Format: <think>...</think><answer>...</answer>
@@ -161,3 +165,95 @@ def make_gold_answer_logprob_reward(
         return rewards
     
     return reward_fn
+
+
+# Load the model once globally
+# sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+
+def sentence_similarity_reward_func(completions, targets, sentence_model=None, **kwargs):
+    """
+    Computes cosine similarity between predicted and target answers using a shared embedding model.
+    Assumes format: <think>...</think>\n<answer>...</answer>
+    """
+    if sentence_model is None:
+        raise ValueError("sentence_model must be provided")
+
+    regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
+
+    rewards = []
+    to_encode = []
+
+    valid_pairs = []  # Stores indices of valid completions
+
+    for i, (completion, target) in enumerate(zip(completions, targets)):
+        try:
+            completion = "<think>" + completion
+            match = re.search(regex, completion, re.DOTALL)
+            if match is None or len(match.groups()) != 2:
+                rewards.append(0.0)
+                continue
+
+            pred = match.group(2).strip()
+            gold = target.strip()
+            to_encode.extend([pred, gold])
+            valid_pairs.append(i)
+            rewards.append(None)  # Placeholder for now
+
+        except Exception as e:
+            print(f"[sentence_reward] Error on pair {i}: {e}")
+            rewards.append(0.0)
+
+    print(to_encode)
+    if to_encode:
+        print("to encode")
+        embeddings = sentence_model.encode(
+            to_encode,
+            convert_to_tensor=True,
+            device='cuda' if torch.cuda.is_available() else 'cpu'
+        )
+
+        for j, i in enumerate(valid_pairs):
+            emb_pred = embeddings[2 * j]
+            emb_target = embeddings[2 * j + 1]
+            cosine_sim = util.cos_sim(emb_pred, emb_target).item()
+            print("Cosine sim:", cosine_sim)
+            reward = max(0.0, cosine_sim)
+            print("Reward: ", reward)
+            rewards[i] = reward
+
+    return rewards
+
+
+def main_rewards():
+    # test on a fixed snippet
+    # Reference target text
+    test_text = (
+        "The moon floats silently above the hills,\n"
+        "Casting silver light on sleeping trees."
+    )
+
+    print("Fixed Test Snippet ===")
+    print(test_text, "\n")
+
+    # Manually constructed completion that matches the regex
+    completion = (
+        "<think>I want to write about the moon in a peaceful landscape, "
+        "using imagery like light, silence, and nature.</think>\n"
+        "<answer>The moon was silently floating over the mountain,\n</answer>"
+    )
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    sentence_model = SentenceTransformer("all-MiniLM-L6-v2").to(device)
+
+    # Bind the model into the reward function
+    similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
+
+    # Compute and print reward
+    reward = similarity_reward([completion], [test_text])[0]
+    print("\n=== Completion ===\n", completion)
+    print("\nReward score:", reward)
+
+
+if __name__ == "__main__":
+    main_rewards()
