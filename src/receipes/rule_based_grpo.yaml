@@ -5,7 +5,7 @@ torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
 tf32: true
-output_dir: /scratch/barghorn/google/gemma-3-1b-it
+output_dir: /scratch/barghorn/google/gemma-3-1b-it/math
 
 # Dataset arguments
 task_type: math
