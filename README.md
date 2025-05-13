@@ -6,3 +6,18 @@ Eliciting Reasoning in LLMs Using Logprob-Based Rewards done during EE-556 Reinf
 |google/gemma-3-1b-it| 0.0333 |0.0|0.434|0.288|0.128|
 |Jeremmmyyyyy/gemma-3-1b-Math|0.0 |0.0|0.446|0.032|0.13|
 |||||||
+
+MATH :
+
+|Reward|length normalization|z-score|min-max|
+|--------------|--------------|--------|--------|
+|Rule based |||
+|Log Probabilities|||
+
+
+Poetry :
+
+|Reward|length normalization|z-score|min-max|
+|--------------|--------------|--------|--------|
+|Rule based |||
+|Log Probabilities|||

@@ -11,7 +11,7 @@ from typing import List
 # from sentence_transformers import SentenceTransformer
 
  
-def format_reward_func(completions, target, **kwargs):
+def format_reward_func(completions, poem_end, **kwargs):
     """
     Format: <think>...</think><answer>...</answer>
     Args:
@@ -23,7 +23,7 @@ def format_reward_func(completions, target, **kwargs):
     """
     rewards = []
 
-    for completion, gt in zip(completions, target):
+    for completion, gt in zip(completions, poem_end):
 
       try:
         # add synthetic <think> as its already part of the prompt and prefilled for the assistant to more easily match the regex
@@ -198,27 +198,42 @@ def reward_poem_form(ref_poem, gen_poem: str) -> int:
     # we only reject if it claims a fixed form but fails its pattern
     return 1 if ref_form == gen_form else 0
 
+def embedding_similarity(text, reference, model):
+    """Safely compute semantic similarity between two texts."""
 
-def embedding_similarity(text, reference):
-    """Use embedding model to compute semantic similarity"""
-    embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-    emb = embed_model.encode([text, reference])
-    sim = cosine_similarity([emb[0]], [emb[1]])[0][0]
-    return sim
+    if not isinstance(text, str) or not isinstance(reference, str):
+        raise ValueError("Both inputs must be strings.")
+
+    if not text.strip() or not reference.strip():
+        return 0.0
+
+    try:
+        text_enc = model.encode([text])
+        reference_enc = model.encode([reference])
+        sim = cosine_similarity([text_enc[0]], [reference_enc[0]])[0][0]
+        return float(sim)
+    except Exception as e:
+        print(f"Error during embedding similarity computation: {e}")
+        return 0.0
 
 
 def global_poetry_reward_func(
         completions:  List[str],
-        target:  List[str], #TODO add to dataset
+        poem_end:  List[str], 
         **kwargs,     # any extra dataset fields are ignored
     ) -> List[float]:
         rewards: List[float] = []
         
-        for completion, gold_answer in zip(completions, target):
+        #load the embedding model once per reward computation instead of at every iteration
+        embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        print("Using embedding model: ", embed_model)
+        
+        for completion, gold_answer in zip(completions, poem_end):
             
             extracted_answer = extract_answer_text(completion)
             
-            similarity = embedding_similarity(completion, gold_answer)
+            similarity = embedding_similarity(completion, gold_answer, embed_model)
+            print("Similarity: ", similarity)
             
             form = reward_poem_form(gold_answer, extracted_answer)
             
