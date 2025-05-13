@@ -88,7 +88,8 @@ def grpo_function(
     elif script_args.task_type == "poetry":
         dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
     
-
+    print(f"Dataset size: {len(dataset)}")
+    print(f"Dataset sample: {dataset[0]}")
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)
 
