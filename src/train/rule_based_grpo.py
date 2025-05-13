@@ -20,7 +20,7 @@ from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
 ########################
 @dataclass
 class ScriptArguments:
-    dataset_id_or_path: str = "Jiayi-Pan/Countdown-Tasks-3to4"
+    dataset_id_or_path: str = "Jeremmmyyyyy/Math"
     dataset_splits: str = "train"
     tokenizer_name_or_path: str = None
     task_type : str = "math"
@@ -76,7 +76,7 @@ def grpo_function(
     dataset = load_dataset(script_args.dataset_id_or_path, split=script_args.dataset_splits)
     # select a random subset of 50k samples
     if script_args.task_type == "math":
-        dataset = dataset.shuffle(seed=42).select(range(10000))
+        dataset = dataset.shuffle(seed=42)
     elif script_args.task_type == "poetry":
         dataset = dataset.shuffle(seed=42)
 

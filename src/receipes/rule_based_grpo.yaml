@@ -9,7 +9,7 @@ output_dir: /scratch/barghorn/google/gemma-3-1b-it/math
 
 # Dataset arguments
 task_type: math
-dataset_id_or_path: Jiayi-Pan/Countdown-Tasks-3to4
+dataset_id_or_path: Jeremmmyyyyy/Math
 
 # Training arguments
 num_train_epochs: 2
