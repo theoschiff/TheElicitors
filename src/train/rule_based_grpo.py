@@ -76,7 +76,7 @@ def grpo_function(
     dataset = load_dataset(script_args.dataset_id_or_path, split=script_args.dataset_splits)
     # select a random subset of 50k samples
     if script_args.task_type == "math":
-        dataset = dataset.shuffle(seed=42).select(range(50000))
+        dataset = dataset.shuffle(seed=42).select(range(10000))
     elif script_args.task_type == "poetry":
         dataset = dataset.shuffle(seed=42)
 

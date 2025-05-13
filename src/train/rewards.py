@@ -34,7 +34,7 @@ def format_reward_func(completions, target, **kwargs):
             f.write(completion)
         
         # Check if the format is correct
-        regex = r"^<think>([^<]*(?:<(?!/?think>)[^<]*)*)<\/think>\n<answer>([\s\S]*?)<\/answer>$"
+        regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
 
         match = re.search(regex, completion, re.DOTALL) 
         # if the format is not correct, reward is 0
@@ -45,6 +45,7 @@ def format_reward_func(completions, target, **kwargs):
       except Exception:
         rewards.append(0.0)
     return rewards
+
 
 def equation_reward_func(completions, target, nums, **kwargs):
     """
