@@ -11,17 +11,18 @@ from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
 from rewards import format_reward_func, equation_reward_func
-
+from functools import partial
+from data_utils import generate_r1_math_prompt
 
 ########################
 # Custom dataclasses
 ########################
 @dataclass
 class ScriptArguments:
-    dataset_id_or_path: str = "Jiayi-Pan/Countdown-Tasks-3to4"
+    dataset_id_or_path: str = "Jeremmmyyyyy/Math"
     dataset_splits: str = "train"
     tokenizer_name_or_path: str = None
-
+    normalization: str = "none"  # Options: none, token-level, z-score, min-max
 
 ########################
 # Setup logging
@@ -38,8 +39,6 @@ logger.addHandler(handler)
 ########################
 # Helper functions
 ########################
-
-
 
 def get_checkpoint(training_args: GRPOConfig):
     last_checkpoint = None
@@ -72,37 +71,34 @@ def grpo_function(
     ###############
     # Load dataset from Hugging Face Hub
     dataset = load_dataset(script_args.dataset_id_or_path, split=script_args.dataset_splits)
-    # select a random subset of 50k samples
-    dataset = dataset.shuffle(seed=42).select(range(50000))
+    # select a random subset of samples
+    dataset = dataset.shuffle(seed=42)
 
     #####################
     # Prepare and format dataset
     #####################
-
-    # gemerate r1 prompt with a prefix for the model to already start with the thinking process
-    def generate_r1_prompt(numbers, target):
-        r1_prefix = [{
-            "role": "system",
-            "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
-          },
-          { 
-            "role": "user",
-            "content": f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) one or multiple times but each number can only be used once. Show your work in <think> </think> tags. And return the final equation in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>. Think step by step inside <think> tags."
-          },
-          {
-            "role": "assistant",
-            "content": "Let me solve this step by step.\n<think>"
-          }]
-        return {"prompt": tokenizer.apply_chat_template(r1_prefix, tokenize=False, continue_final_message=True), "target": target, "nums": numbers}
-
-    # convert our dataset to the r1 prompt
-    dataset = dataset.map(lambda x: generate_r1_prompt(x["nums"], x["target"]))
-
+    dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
+    
+    print(f"Dataset size: {len(dataset)}")
+    print(f"Dataset sample: {dataset[0]}")
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)
 
     train_dataset = train_test_split["train"]
     test_dataset = train_test_split["test"]
+
+    # Setup rewards with normalization
+    logger.info(f"Using normalization method: {script_args.normalization}")
+    
+    # Create reward functions with the normalization parameter
+    format_reward_with_norm = partial(format_reward_func, normalization=script_args.normalization)
+    equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
+    
+    # Add __name__ attributes to the partial functions
+    format_reward_with_norm.__name__ = "format_reward_func"
+    equation_reward_with_norm.__name__ = "equation_reward_func"
+    
+    reward_functions = [format_reward_with_norm, equation_reward_with_norm]
 
     #########################
     # Instantiate DPO trainer
@@ -110,19 +106,20 @@ def grpo_function(
 
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,
-      reward_funcs=[format_reward_func, equation_reward_func],
+      reward_funcs=reward_functions,
       args=training_args,
       train_dataset=train_dataset,
       eval_dataset=test_dataset,
       peft_config=get_peft_config(model_args),
     )
     
-        #########################
+    #########################
     # Log parameters
     #########################
     if trainer.accelerator.is_main_process:
         logger.info(f"Model parameters {model_args}")
         logger.info(f"Training/evaluation parameters {training_args}")
+        logger.info(f"Using normalization method: {script_args.normalization}")
 
 
     ###############
