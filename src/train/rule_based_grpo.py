@@ -91,7 +91,7 @@ def grpo_function(
     logger.info(f"Using normalization method: {script_args.normalization}")
     
     # Create reward functions with the normalization parameter
-    format_reward_with_norm = partial(format_reward_func, normalization=script_args.normalization)
+    format_reward_with_norm = partial(format_reward_func, normalization="none")
     equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
     
     # Add __name__ attributes to the partial functions
