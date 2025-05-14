@@ -17,13 +17,14 @@ cd src/evaluation
 NUM_GPUS=1
 
 MODELS=(
-    # google/gemma-3-1b-it
-    Jeremmmyyyyy/gemma-3-1b-Math
+    google/gemma-3-1b-it
+    Jeremmmyyyyy/Gemma-Math-RB-no-norm
 )
 
 GENERATION_SIZES=(
     # 16384
-    8192
+    2048
+    2048
 )
 
 for i in "${!MODELS[@]}"; do
@@ -36,10 +37,11 @@ for i in "${!MODELS[@]}"; do
     echo "Generation Size: $GEN_SIZE"
     echo "-----------------------------------------------------"
 
-    MODEL_ARGS="pretrained=$MODEL,dtype=bfloat16,max_model_length=$GEN_SIZE,tensor_parallel_size=$NUM_GPUS,gpu_memory_utilization=0.9,generation_parameters={max_new_tokens:$GEN_SIZE,temperature:0.6,top_p:0.95}"
+    MODEL_ARGS="model_name=$MODEL,dtype=bfloat16,max_model_length=$GEN_SIZE,tensor_parallel_size=$NUM_GPUS,gpu_memory_utilization=0.9,generation_parameters={max_new_tokens:$GEN_SIZE,temperature:0.6,top_p:0.95}"
     OUTPUT_DIR=data/evals/$(basename $MODEL)
 
-    for TASK in aime24 aime25 math_500 "gpqa:diamond" U_math; do
+    # for TASK in aime24 aime25 math_500 "gpqa:diamond" U_math; do
+    for TASK in math_calculation; do
 
         echo "Running evaluation for $TASK with model $MODEL and generation size $GEN_SIZE"
         
