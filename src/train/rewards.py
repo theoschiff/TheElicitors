@@ -105,33 +105,26 @@ def equation_reward_func(completions, target, nums, **kwargs):
     return rewards
 
 
+# -- Poetry-specific functions --
 
-def count_syllables(word):
-    """Count syllables in a word using cmudict or fallback to simple rule"""
-    try:
-        nltk.data.find("corpora/cmudict")
-    except LookupError:
-        nltk.download("cmudict")
+CMU = cmudict.dict()        # keep it global so we load only once
+VOWEL_RE = re.compile(r"[aeiouy]+")
 
+def count_syllables(word: str) -> int:
+    """Best-effort syllable count with CMU fallback."""
     word = word.lower()
-    d = cmudict.dict()
-    
-    if word in d:
-        return max([len([y for y in x if y[-1].isdigit()]) for x in d[word]])
-    else:
-        # fallback: estimate syllables by vowel groups
-        return len(re.findall(r'[aeiouy]+', word.lower()))
+    if word in CMU:
+        # a word can have multiple pronunciations; take the max syllable count
+        return max(len([p for p in pron if p[-1].isdigit()]) for pron in CMU[word])
+    return len(VOWEL_RE.findall(word))
 
-def total_syllables(text):
-    """Count total syllables in a piece of text"""
-    words = re.findall(r'\b\w+\b', text.lower())
-    return sum(count_syllables(w) for w in words)
+def total_syllables(line: str) -> int:
+    return sum(count_syllables(w) for w in re.findall(r"\b\w+\b", line.lower()))
 
 def rhymes(a, b):
     """Simple rhyme test: compare last stressed vowel onward (using cmudict)"""
-    d = cmudict.dict()
     def rhyme_key(word):
-        phones = d.get(word.lower(), [])
+        phones = CMU.get(word.lower(), [])
         if not phones: return None
         # take the last vowel+stress onward
         for pron in phones:
@@ -194,17 +187,71 @@ def classify_form(poem):
 
     return "free_verse"
 
-def reward_poem_form(ref_poem, gen_poem: str, ref_form: str) -> int:
-    """
-    Returns 1 if the poem matches its detected form (based on rhymes and syllabes):
-      - sonnet, haiku, or limerick structural rules (We should def add more later like Tanka, Sijo, Acrostic etc (found on masterclass website))
-      - OR free-verse (no stricter constraint)
-    Otherwise returns 0.
-    """
-    full_poem = ref_poem + gen_poem
-    full_form = classify_form(full_poem)
 
-    return 1 if full_form == ref_form else 0
+
+
+def rhyme_key(word: str):
+    """Return CMU rhyme key (last stressed vowel → end) or None."""
+    phones = CMU.get(word.lower())
+    if not phones:
+        return None
+    for pron in phones:                         # try each pronunciation
+        for i in range(len(pron) - 1, -1, -1):
+            if pron[i][-1].isdigit():           # first stressed vowel from the end
+                return tuple(pron[i:])
+    return None
+
+def rhyme_accuracy(gen: str, ref: str) -> float:
+    """
+    A line is 'correct' if its end-word rhymes with the end-word of the
+    corresponding reference line (same CMU rhyme key).
+    """
+    g_lines = [l for l in gen.strip().splitlines() if l.strip()]
+    r_lines = [l for l in ref.strip().splitlines() if l.strip()]
+    n = min(len(g_lines), len(r_lines))
+    if n == 0:
+        return 0.0
+
+    hits = 0
+    checked = 0
+    for g, r in zip(g_lines[:n], r_lines[:n]):
+        g_last = re.findall(r"\b\w+\b", g.lower())[-1]
+        r_last = re.findall(r"\b\w+\b", r.lower())[-1]
+        kg, kr = rhyme_key(g_last), rhyme_key(r_last)
+        if kg and kr:                # only score when we have information
+            hits += int(kg == kr)
+            checked += 1
+    return hits / checked if checked else 0.0
+
+def syllable_accuracy(gen: str, ref: str) -> float:
+    """
+    Per-line accuracy = 1 - |Δ syllables| / ref_syllables  (floored at 0).
+    Overall score is the mean across comparable lines.
+    """
+    g_lines = [l for l in gen.strip().splitlines() if l.strip()]
+    r_lines = [l for l in ref.strip().splitlines() if l.strip()]
+    n = min(len(g_lines), len(r_lines))
+    if n == 0:
+        return 0.0
+
+    scores = []
+    for g, r in zip(g_lines[:n], r_lines[:n]):
+        rs = total_syllables(r)
+        if rs == 0:
+            continue
+        diff = abs(total_syllables(g) - rs)
+        scores.append(max(0.0, 1.0 - diff / rs))
+
+    return sum(scores) / len(scores) if scores else 0.0
+
+def reward_poem_form(ref_poem: str, gen_poem: str) -> int:
+    """
+    Binary reward: 1 if the *combined* poem (reference beginning + generation)
+    has the same detected form as the gold full poem, else 0.
+    """
+    gold_form   = classify_form(ref_poem)
+    test_form   = classify_form(gen_poem)
+    return int(gold_form == test_form)
     
 
 def embedding_similarity(text, reference, model):
@@ -227,30 +274,43 @@ def embedding_similarity(text, reference, model):
 
 
 def global_poetry_reward_func(
-        completions:  List[str],
-        poem_end:  List[str], 
-        **kwargs,     # any extra dataset fields are ignored
+        completions: List[str],
+        poem_end:   List[str],      # the gold continuation
+        ref_start:  List[str],      # pass the given first-third here
     ) -> List[float]:
-        rewards: List[float] = []
-        
-        #load the embedding model once per reward computation instead of at every iteration
-        embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        print("Using embedding model: ", embed_model)
-        
-        for completion, gold_answer in zip(completions, poem_end):
-            
-            extracted_answer = extract_answer_text(completion)
-            
-            similarity = embedding_similarity(completion, gold_answer, embed_model)
-            print("Similarity: ", similarity)
-            
-            form = reward_poem_form(gold_answer, extracted_answer)
-            
-            reward = 0.4 * similarity + 0.6 * form
-            
-            rewards.append(reward)
-        
-        return rewards
+
+    rewards = []
+    embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+    # Weights : tweak as you wish, must sum to 1
+    q, r, s, t = 0.30, 0.25, 0.25, 0.20   # sim, form, rhymes, syllables
+
+    for completion, gold_answer, gold_begin in zip(completions, poem_end, ref_start):
+        gen = extract_answer_text(completion)
+
+        # 1) semantic similarity on the continuation only
+        similarity = embedding_similarity(gen, gold_answer, embed_model)
+
+        # 2) binary structural form (full poem)
+        form_ok = reward_poem_form(gold_begin + gold_answer,
+                                   gold_begin + gen)
+
+        # 3) rhyme & syllable continuums
+        rhyme_score    = rhyme_accuracy(gen, gold_answer)
+        syllable_score = syllable_accuracy(gen, gold_answer)
+
+        final_reward = (
+              q * similarity
+            + r * form_ok
+            + s * rhyme_score
+            + t * syllable_score
+        )
+        rewards.append(final_reward)
+
+    return rewards
+
+# -- end of poetry-specific functions --
+
 
 def main_rewards():
     # test on a fixed snippet
