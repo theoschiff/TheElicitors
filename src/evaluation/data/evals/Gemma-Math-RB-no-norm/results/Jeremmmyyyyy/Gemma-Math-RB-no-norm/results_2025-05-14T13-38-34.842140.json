@@ -2,13 +2,12 @@
   "config_general": {
     "lighteval_sha": "?",
     "num_fewshot_seeds": 1,
-    "override_batch_size": -1,
     "max_samples": null,
     "job_id": 0,
-    "start_time": 7058.791867294,
-    "end_time": 7567.465374372,
-    "total_evaluation_time_secondes": "508.6735070779996",
-    "model_name": "google/gemma-3-1b-it",
+    "start_time": 17554.156782738,
+    "end_time": 17702.233912815,
+    "total_evaluation_time_secondes": "148.07713007700295",
+    "model_name": "Jeremmmyyyyy/Gemma-Math-RB-no-norm",
     "model_sha": "",
     "model_dtype": null,
     "model_size": null,
@@ -18,7 +17,7 @@
       "frequency_penalty": null,
       "length_penalty": null,
       "presence_penalty": null,
-      "max_new_tokens": 8192,
+      "max_new_tokens": 2048,
       "min_new_tokens": null,
       "seed": null,
       "stop_tokens": null,
@@ -31,32 +30,34 @@
     }
   },
   "results": {
-    "custom|U_math|0": {
-      "extractive_match": 0.12777777777777777,
-      "extractive_match_stderr": 0.01113426089197776
+    "custom|math_calculation|0": {
+      "format_score": 0.847,
+      "equation_score": 0.089,
+      "avg_score": 0.468
     },
     "all": {
-      "extractive_match": 0.12777777777777777,
-      "extractive_match_stderr": 0.01113426089197776
+      "format_score": 0.847,
+      "equation_score": 0.089,
+      "avg_score": 0.468
     }
   },
   "versions": {
-    "custom|U_math|0": 1
+    "custom|math_calculation|0": 1
   },
   "config_tasks": {
-    "custom|U_math": {
-      "name": "U_math",
-      "prompt_function": "u_math_prompt_fn",
-      "hf_repo": "Jeremmmyyyyy/U_math_lighteval",
+    "custom|math_calculation": {
+      "name": "math_calculation",
+      "prompt_function": "math_calculation_prompt_fn",
+      "hf_repo": "Jeremmmyyyyy/math",
       "hf_subset": "default",
       "metric": [
         {
-          "metric_name": "extractive_match",
+          "metric_name": "math_calculation",
           "higher_is_better": true,
           "category": "3",
           "use_case": "1",
-          "sample_level_fn": "sample_level_fn",
-          "corpus_level_fn": "mean"
+          "sample_level_fn": "math_calculation_metric",
+          "corpus_level_fn": "corpus_level_fn"
         }
       ],
       "hf_revision": null,
@@ -70,46 +71,46 @@
       ],
       "few_shots_split": null,
       "few_shots_select": null,
-      "generation_size": 8192,
+      "generation_size": 2048,
       "generation_grammar": null,
       "stop_sequence": [],
       "num_samples": null,
       "suite": [
         "custom"
       ],
-      "original_num_docs": 900,
-      "effective_num_docs": 900,
+      "original_num_docs": 1000,
+      "effective_num_docs": 1000,
       "must_remove_duplicate_docs": false,
       "version": 1
     }
   },
   "summary_tasks": {
-    "custom|U_math|0": {
+    "custom|math_calculation|0": {
       "hashes": {
-        "hash_examples": "783f51082ffbcac9",
-        "hash_full_prompts": "d9e46e7904b3af46",
-        "hash_input_tokens": "6fdf1fea6c969f73",
-        "hash_cont_tokens": "ee987d24756a10ce"
+        "hash_examples": "585a3df519df0af0",
+        "hash_full_prompts": "4b017a2ba298ac91",
+        "hash_input_tokens": "f4d62f69dd7b51bf",
+        "hash_cont_tokens": "27212dd7dc187c75"
       },
       "truncated": 0,
-      "non_truncated": 900,
+      "non_truncated": 1000,
       "padded": 0,
-      "non_padded": 900,
+      "non_padded": 1000,
       "effective_few_shots": 0.0,
       "num_truncated_few_shots": 0
     }
   },
   "summary_general": {
     "hashes": {
-      "hash_examples": "248d8a215dda9f34",
-      "hash_full_prompts": "b80141c468d2a30c",
-      "hash_input_tokens": "455040634c80cbc8",
-      "hash_cont_tokens": "11e2e8ab098a292a"
+      "hash_examples": "f964cdd168af095b",
+      "hash_full_prompts": "09c5199b7625d918",
+      "hash_input_tokens": "fe378719840a3064",
+      "hash_cont_tokens": "634c7de3f572e3aa"
     },
     "truncated": 0,
-    "non_truncated": 900,
+    "non_truncated": 1000,
     "padded": 0,
-    "non_padded": 900,
+    "non_padded": 1000,
     "num_truncated_few_shots": 0
   }
 }

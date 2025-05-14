@@ -10,9 +10,10 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, equation_reward_func
+from rewards import format_reward_func, equation_reward_func, sentence_similarity_reward_func
+from sentence_transformers import SentenceTransformer, util
 from functools import partial
-from data_utils import generate_r1_math_prompt
+from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
 
 ########################
 # Custom dataclasses
@@ -23,6 +24,7 @@ class ScriptArguments:
     dataset_splits: str = "train"
     tokenizer_name_or_path: str = None
     normalization: str = "none"  # Options: none, token-level, z-score, min-max
+    task_type : str = "math"
 
 ########################
 # Setup logging
@@ -71,13 +73,19 @@ def grpo_function(
     ###############
     # Load dataset from Hugging Face Hub
     dataset = load_dataset(script_args.dataset_id_or_path, split=script_args.dataset_splits)
-    # select a random subset of samples
-    dataset = dataset.shuffle(seed=42)
+    # select a random subset of 50k samples
+    if script_args.task_type == "math":
+        dataset = dataset.shuffle(seed=42)
+    elif script_args.task_type == "poetry":
+        dataset = dataset.shuffle(seed=42)
 
     #####################
     # Prepare and format dataset
     #####################
-    dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
+    if script_args.task_type == "math":
+        dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
+    elif script_args.task_type == "poetry":
+        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
     
     print(f"Dataset size: {len(dataset)}")
     print(f"Dataset sample: {dataset[0]}")
@@ -98,7 +106,14 @@ def grpo_function(
     format_reward_with_norm.__name__ = "format_reward_func"
     equation_reward_with_norm.__name__ = "equation_reward_func"
     
-    reward_functions = [format_reward_with_norm, equation_reward_with_norm]
+    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+    print(f"Sentence_model on device: {sentence_model.device}")
+    
+    if script_args.task_type == "math":
+        reward_functions = [format_reward_with_norm, equation_reward_with_norm]
+    elif script_args.task_type == "poetry":
+        similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
+        reward_functions = [format_reward_with_norm, equation_reward_with_norm, similarity_reward]
 
     #########################
     # Instantiate DPO trainer

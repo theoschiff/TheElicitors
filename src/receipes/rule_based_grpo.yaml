@@ -8,8 +8,9 @@ tf32: true
 output_dir: /scratch/izar/mellouli/google/gemma-3-1b-it/math-z-score-norm
 
 # Dataset arguments
+task_type: math
 dataset_id_or_path: Jeremmmyyyyy/Math
-normalization: z-score  # Options: none, token-level, z-score, min-max
+nomalization: z-score
 
 # Training arguments
 num_train_epochs: 2
