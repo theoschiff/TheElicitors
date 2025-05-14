@@ -5,11 +5,12 @@ torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
 tf32: true
-output_dir: /scratch/barghorn/google/gemma-3-1b-it/math
+output_dir: /scratch/izar/mellouli/google/gemma-3-1b-it/math-z-score-norm
 
 # Dataset arguments
 task_type: math
 dataset_id_or_path: Jeremmmyyyyy/Math
+nomalization: z-score
 
 # Training arguments
 num_train_epochs: 2

@@ -13,7 +13,7 @@ from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
 import openai
 import re
 from rewards import format_reward_func, equation_reward_func, make_gold_answer_logprob_reward
-from data_utils import generate_r1_prompt
+from data_utils import generate_r1_prompt, add_gold_answer_to_dataset
 
 
 ########################
@@ -27,6 +27,7 @@ class ScriptArguments:
 
     use_logprob_reward: bool = True
     vllm_api_base: str = "http://localhost:8000"
+    normalization: str = "token-level"
 
 
 ########################
@@ -69,6 +70,7 @@ def grpo_function(
         ),
         revision=model_args.model_revision,
         trust_remote_code=model_args.trust_remote_code,
+	use_auth_token=True
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -80,6 +82,7 @@ def grpo_function(
     dataset = load_dataset(script_args.dataset_id_or_path, split=script_args.dataset_splits)
     # select a random subset of 50k samples
     dataset = dataset.shuffle(seed=42).select(range(50000))
+    dataset = add_gold_answer_to_dataset(dataset)
 
     #####################
     # Prepare and format dataset
@@ -104,8 +107,9 @@ def grpo_function(
             model_name    = model_args.model_name_or_path,
             api_base   = script_args.vllm_api_base,
             tokenizer  = tokenizer,
-            batch_size    = model_args.per_device_train_batch_size # 8 # tune for your GPU / throughput
-        )
+            batch_size    = model_args.per_device_train_batch_size, # 8 # tune for your GPU / throughput
+            normalization = script_args.normalization
+        )   
         reward_funcs.append(gold_logprob_reward)
 
     trainer = GRPOTrainer(

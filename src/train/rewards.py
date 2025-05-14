@@ -7,14 +7,54 @@ import re
 from sentence_transformers import util, SentenceTransformer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from functools import partial
+ 
+def normalize_rewards(rewards, normalization_type="none", token_counts=None):
+    """
+    Apply normalization to a list of rewards.
+    
+    Args:
+        rewards (list[float]): List of reward values
+        normalization_type (str): Type of normalization to apply ('none', 'token-level', 'z-score', 'min-max')
+        token_counts (list[int], optional): List of token counts (required for token-level normalization)
+    
+    Returns:
+        list[float]: Normalized rewards
+    """
+    if normalization_type == "none" or not rewards:
+        return rewards
+    
+    # Make a copy of rewards to avoid modifying the original
+    normalized_rewards = rewards.copy()
+    
+    if normalization_type == "token-level":
+        if token_counts is None:
+            print("Warning: Token counts are required for token-level normalization but not provided.")
+            return rewards
+        normalized_rewards = [r / max(1, c) for r, c in zip(normalized_rewards, token_counts)]
+    
+    elif normalization_type == "z-score":
+        mean_reward = sum(normalized_rewards) / len(normalized_rewards)
+        variance = sum((r - mean_reward) ** 2 for r in normalized_rewards) / len(normalized_rewards)
+        std_reward = variance ** 0.5
+        if std_reward > 0:  
+            normalized_rewards = [(r - mean_reward) / std_reward for r in normalized_rewards]
+    
+    elif normalization_type == "min-max":
+        min_reward = min(normalized_rewards)
+        max_reward = max(normalized_rewards)
+        if max_reward > min_reward:  
+            normalized_rewards = [(r - min_reward) / (max_reward - min_reward) for r in normalized_rewards]
+    
+    return normalized_rewards
 
 
-def format_reward_func(completions, target, **kwargs):
+def format_reward_func(completions, target, normalization="none", **kwargs):
     """
     Format: <think>...</think><answer>...</answer>
     Args:
         completions (list[str]): Generated outputs
         target (list[str]): Expected answers
+        normalization (str): Type of normalization to apply ('none', 'token-level', 'z-score', 'min-max')
       
       Returns:
           list[float]: Reward scores
@@ -44,10 +84,14 @@ def format_reward_func(completions, target, **kwargs):
             rewards.append(1.0)
       except Exception:
         rewards.append(0.0)
+    
+    # Apply normalization (except token-level which requires token counts)
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
+    
     return rewards
 
-
-def equation_reward_func(completions, target, nums, **kwargs):
+def equation_reward_func(completions, target, nums, normalization="none", **kwargs):
     """
     Evaluates completions based on:
     2. Mathematical correctness of the answer
@@ -56,6 +100,7 @@ def equation_reward_func(completions, target, nums, **kwargs):
         completions (list[str]): Generated outputs
         target (list[str]): Expected answers
         nums (list[str]): Available numbers
+        normalization (str): Type of normalization to apply ('none', 'token-level', 'z-score', 'min-max')
     
     Returns:
         list[float]: Reward scores
@@ -100,68 +145,100 @@ def equation_reward_func(completions, target, nums, **kwargs):
             rewards.append(0.0)
       except Exception:
             # If evaluation fails, reward is 0
-            rewards.append(0.0) 
+            rewards.append(0.0)
+    
+    # Apply normalization (except token-level which requires token counts)
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
+    
     return rewards
 
 def make_gold_answer_logprob_reward(
     api_base: str,
-    model_name:    str,
+    model_name: str,
     tokenizer,
-    batch_size:    int = 8,
+    batch_size: int = 8,
+    normalization: str = "none",
 ):
     """
     Returns a reward function that takes:
       - prompts: List[str]
       - completions: List[str]    (with <think>…</think><answer>…</answer>)
-      - target: List[str]
+      - gold_answers: List[str]
     and returns List[float] of log-probs for target under the current policy
     served by your vLLM HTTP server.
+    
+    Args:
+        api_base: URL for the vLLM server
+        model_name: Name of the model to use
+        tokenizer: HuggingFace tokenizer
+        batch_size: Batch size for processing
+        normalization: Type of normalization to apply ('none', 'token-level', 'z-score', 'min-max')
+    
+    Returns:
+        function: Reward function
     """
     # configure OpenAI-compatible client
     openai.api_base = api_base.rstrip("/") + "/v1"
-    openai.api_key  = ""
+    openai.api_key = ""
     
     def reward_fn(
-        prompts:      List[str],
-        completions:  List[str],
-        gold_answers:  List[str], #TODO add to dataset
-        **kwargs,     # any extra dataset fields are ignored
+        prompts: List[str],
+        completions: List[str],
+        gold_answers: List[str],
+        **kwargs,  # any extra dataset fields are ignored
     ) -> List[float]:
-        rewards: List[float] = []
+        rewards = []
+        token_counts = []  # For token-level normalization
         
         # process in batches
         for i in range(0, len(prompts), batch_size):
             slice_end = i + batch_size
-            ctxs    = []
+            ctxs = []
             
             # build each context = prompt + reasoning + "</think>\n"
-            for prompt, completion, gold_answer in zip(prompts[i:slice_end], completions[i:slice_end], gold_answers[i:slice_end]):
+            for prompt, completion, gold_answer in zip(
+                prompts[i:slice_end], 
+                completions[i:slice_end], 
+                gold_answers[i:slice_end]
+            ):
                 m = re.search(r"<think>([\s\S]*?)</think>", completion)
                 reasoning = m.group(1) if m else ""
                 
                 ctxs.append(prompt + reasoning + "</think>\n<answer>" + gold_answer + "</answer>")
-                
-
+            
             # call vLLM in one go
             resp = openai.Completion.create(
-                model      = model_name,
-                prompt     = ctxs,    # list of strings
-                max_tokens = 0,       # no new tokens
-                echo       = True,    # return logprobs for all input tokens
-                logprobs   = 1,
+                model = model_name,
+                prompt = ctxs,    # list of strings
+                max_tokens = 0,   # no new tokens
+                echo = True,      # return logprobs for all input tokens
+                logprobs = 1,
             )
             
             # extract per-example rewards
             for choice, gold_answer in zip(resp.choices, gold_answers[i:slice_end]):
-                token_logprobs = choice.logprobs.token_logprobs # TODO check dimensions
+                token_logprobs = choice.logprobs.token_logprobs
                 
                 # how many logprobs correspond to the gold_answer?
-                ans_ids = tokenizer("<answer>" + gold_answer + "</answer>",
-                                    add_special_tokens=False).input_ids
+                ans_ids = tokenizer(
+                    "<answer>" + gold_answer + "</answer>",
+                    add_special_tokens=False
+                ).input_ids
                 n = len(ans_ids)
                 
-                # sum the last n entries
-                rewards.append(sum(token_logprobs[-n:]))
+                # Store the raw reward (sum of logprobs)
+                reward = sum(token_logprobs[-n:])
+                rewards.append(reward)
+                
+                # Store token count for token-level normalization
+                token_counts.append(n)
+        
+        # Apply normalization based on the specified method
+        if normalization == "token-level":
+            rewards = normalize_rewards(rewards, normalization, token_counts)
+        elif normalization != "none":
+            rewards = normalize_rewards(rewards, normalization)
         
         return rewards
     
