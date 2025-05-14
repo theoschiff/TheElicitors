@@ -11,7 +11,8 @@ Eliciting Reasoning in LLMs Using Logprob-Based Rewards done during EE-556 Reinf
 ### MATH : accuracy score on the test set
 |Reward|no normalization|length normalization|z-score|min-max|
 |--------------|--------------|--------|--------|--------|
-|Rule based ||||
+|Baseline|0.0085|-|-|-|
+|Rule based |0.468|||
 |Log Probabilities||||
 
 
