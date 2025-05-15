@@ -17,8 +17,9 @@ cd src/evaluation
 NUM_GPUS=1
 
 MODELS=(
-    google/gemma-3-1b-it
-    Jeremmmyyyyy/Gemma-Math-RB-no-norm
+    Qwen/Qwen3-1.7B-Base
+    Jeremmmyyyyy/Qwen-math-no-normalization
+    # Jeremmmyyyyy/Gemma-Math-RB-no-norm
 )
 
 GENERATION_SIZES=(
