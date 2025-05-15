@@ -37,7 +37,7 @@ export HF_HOME="/scratch/barghorn/.cache"
 python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
 
 export CUDA_VISIBLE_DEVICES=0
-trl vllm-serve --model google/gemma-3-1b-it &
+trl vllm-serve --model Qwen/Qwen3-1.7B &
 
 sleep 120
 echo "Starting GRPO training"
@@ -46,4 +46,3 @@ export CUDA_VISIBLE_DEVICES=1,2
 ACCELERATE_LOG_LEVEL=info \
     accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
     train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
-

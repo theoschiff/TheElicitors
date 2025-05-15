@@ -106,16 +106,17 @@ def grpo_function(
     format_reward_with_norm.__name__ = "format_reward_func"
     equation_reward_with_norm.__name__ = "equation_reward_func"
     
-    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-    print(f"Sentence_model on device: {sentence_model.device}")
+
     
     if script_args.task_type == "math":
         reward_functions = [format_reward_with_norm, equation_reward_with_norm]
-        reward_weights = [0.5, 0.5]
+        training_args.reward_weights = [0.5, 0.5]
     elif script_args.task_type == "poetry":
+        sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+        print(f"Sentence_model on device: {sentence_model.device}")
         similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
         reward_functions = [format_reward_with_norm, similarity_reward]
-        reward_weights = [0.5, 0.5]
+        training_args.reward_weights = [0.5, 0.5]
 
     #########################
     # Instantiate DPO trainer
@@ -124,7 +125,6 @@ def grpo_function(
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,
       reward_funcs=reward_functions,
-      reward_weights=reward_weights,
       args=training_args,
       train_dataset=train_dataset,
       eval_dataset=test_dataset,
