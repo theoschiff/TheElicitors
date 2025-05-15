@@ -118,7 +118,7 @@ def grpo_function(
         reward_weights = [0.5, 0.5]
 
     #########################
-    # Instantiate DPO trainer
+    # Instantiate GRPO trainer
     #########################
 
     trainer = GRPOTrainer(
