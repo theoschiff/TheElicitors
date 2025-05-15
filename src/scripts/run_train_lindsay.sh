@@ -1,10 +1,9 @@
 #!/bin/bash
 #SBATCH --chdir=/home/bordier/TheElicitors
-#SBATCH --account master
 #SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
-#SBATCH --partition=gpu
+#SBATCH --partition=test
 #SBATCH --time=10:00:00
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=128G
