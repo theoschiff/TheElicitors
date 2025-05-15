@@ -5,7 +5,7 @@ torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
 tf32: true
-output_dir: /scratch/bordier/Qwen/Qwen3-1.7B/Qwen-math-normalization-token_level
+output_dir: /home/bordier/TheElicitors
 
 # Dataset arguments
 task_type: math
