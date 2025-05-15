@@ -313,39 +313,93 @@ def global_poetry_reward_func(
 
 
 def main_rewards():
-    # test on a fixed snippet
-    test_text = (
-        "The fields were bleak and sodden. Not a wing\n"
-        "Or note enlivened the depressing wood,\n"
-        "A soiled and sullen, stubborn snowdrift stood\n"
-        "Beside the roadway. Winds came muttering"
-    )
+    poem_start_1 = """Young ardent soul, graced with fair Nature's truth,
+    Spring warmth of heart, and fervency of mind,
+    And still a large late love of all thy kind.
+    Spite of the world's cold practice and Time's tooth,"""
 
-    print("Fixed Test Snippet ===")
-    print(test_text, "\n")
-    print("Detected form: ", classify_form(test_text))
+    poem_end_1 = """For all these gifts, I know not, in fair sooth,
+    Whether to give thee joy, or bid thee blind
+    Thine eyes with tears, - that thou hast not resign'd
+    The passionate fire and freshness of thy youth:
+    For as the current of thy life shall flow,
+    Gilded by shine of sun or shadow-stain'd,
+    Through flow'ry valley or unwholesome fen,
+    Thrice blessed in thy joy, or in thy woe
+    Thrice cursed of thy race, - thou art ordain'd
+    To share beyond the lot of common men."""
 
+    form_1= "sonnet"
+
+    poem_start_2 = """Now while my lips are living
+    Their words must stay unsaid,"""
+
+    poem_end_2 = """And will my soul remember
+    To speak when I am dead?
+    Yet if my soul remembered
+    You would not heed it, dear,
+    For now you must not listen,
+    And then you could not hear."""
+
+    form_2 = "octave"
     # generate a poem with gemma 1b 
-    model_name = "google/gemma-3-1b-it"
+    model_name = "Qwen/Qwen3-1.7B"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model     = AutoModelForCausalLM.from_pretrained(model_name).eval()
 
-    prompt = "Write a short poem about the moon:\n<answer>"
-    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    prompt_1 = f"Write a poem in the form of {form_1} with the following start:\n{poem_start_1}\n"
+    prompt_1 += "<think>"
+    input_ids_1 = tokenizer(prompt_1, return_tensors="pt").input_ids
 
     with torch.no_grad():
         gen_output = model.generate(
-            input_ids,
+            input_ids_1,
             max_new_tokens=100,
             do_sample=True,
             temperature=0.9
         )
-    generated = tokenizer.decode(gen_output[0], skip_special_tokens=True)
+    completion_1 = tokenizer.decode(gen_output[0], skip_special_tokens=True)
 
     print("=== Generated Poem ===")
-    print(generated, "\n")
-    print("Detected form: ", classify_form(generated))
-    print("Reward (0/1):", reward_poem_form(test_text, generated))
+    print(completion_1, "\n")
+    print("Detected form: ", classify_form(completion_1))
+
+    prompt_2 = f"Write a poem in the form of {form_2} with the following start:\n{poem_start_2}\n"
+    prompt_2 += "<think>"
+    input_ids_2 = tokenizer(prompt_2, return_tensors="pt").input_ids
+    with torch.no_grad():
+        gen_output = model.generate(
+            input_ids_2,
+            max_new_tokens=100,
+            do_sample=True,
+            temperature=0.9
+        )
+    completion_2 = tokenizer.decode(gen_output[0], skip_special_tokens=True)
+    print("=== Generated Poem 2===")
+    print(completion_2, "\n")
+    print("Detected form: ", classify_form(completion_2))
+    print("=== Reference Poem ===")
+    print(poem_start_1 + poem_end_1, "\n")
+    print("Detected form: ", classify_form(poem_start_1 + poem_end_1))
+
+
+    # Run evaluations
+    rewards = global_poetry_reward_func(
+        completions=[completion_1, completion_2],
+        poem_end=[poem_end_1, poem_end_2],
+        ref_start=[poem_start_1, poem_start_2]
+    )
+
+    embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+    print("=== Rewards ===")
+    for i, reward in enumerate(rewards):
+        print(f"Poem {i+1} Reward: {reward:.4f}")
+        print(f"Poem {i+1} Form: {classify_form(completion_1)}")
+        print(f"Poem {i+1} Rhyme Accuracy: {rhyme_accuracy(completion_1, poem_end_1):.4f}")
+        print(f"Poem {i+1} Syllable Accuracy: {syllable_accuracy(completion_1, poem_end_1):.4f}")
+        print(f"Poem {i+1} Embedding Similarity: {embedding_similarity(completion_1, poem_end_1, embed_model):.4f}")
+        print(f"Poem {i+1} Syllable Count: {total_syllables(completion_1)}")
 
 
 if __name__ == "__main__":
