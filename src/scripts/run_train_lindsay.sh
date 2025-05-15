@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --chdir=/home/bordier/TheElicitors
+#SBATCH --account master
 #SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
