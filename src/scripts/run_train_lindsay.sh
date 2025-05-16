@@ -44,6 +44,10 @@ echo "Starting GRPO training"
 cd
 cd TheElicitors/src
 
+echo "Current directory: $(pwd)"
+echo "Files in directory:"
+ls
+
 # Stage 2: GRPO Training
 export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
