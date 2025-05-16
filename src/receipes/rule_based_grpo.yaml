@@ -5,12 +5,12 @@ torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
 tf32: true
-output_dir: /scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-normalization-token_level
+output_dir: /scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-normalization-z_score
 
 # Dataset arguments
 task_type: math
 dataset_id_or_path: Jeremmmyyyyy/Math
-nomalization: 'token-level'
+nomalization: 'z-score'
 
 # Training arguments
 num_train_epochs: 2
