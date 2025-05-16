@@ -41,5 +41,5 @@ save_steps: 25
 seed: 42
 
 # Hugging Face Hub 
-push_to_hub: true
+push_to_hub: false
 hub_strategy: every_save
