@@ -10,10 +10,10 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, equation_reward_func, global_poetry_reward_func, sentence_similarity_reward_func
-from sentence_transformers import SentenceTransformer, util
-from functools import partial
-from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
+import openai
+import re
+from rewards import format_reward_func, equation_reward_func, make_gold_answer_logprob_reward
+from data_utils import generate_r1_prompt, add_gold_answer_to_dataset
 
 
 ########################
@@ -21,11 +21,14 @@ from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
 ########################
 @dataclass
 class ScriptArguments:
-    dataset_id_or_path: str = "Jeremmmyyyyy/Math"
+    dataset_id_or_path: str = "Jiayi-Pan/Countdown-Tasks-3to4"
     dataset_splits: str = "train"
     tokenizer_name_or_path: str = None
-    normalization: str = "none"  # Options: none, token-level, z-score, min-max
-    task_type : str = "math"
+
+    use_logprob_reward: bool = True
+    vllm_api_base: str = "http://localhost:8000"
+    normalization: str = "token-level"
+
 
 ########################
 # Setup logging
@@ -42,6 +45,8 @@ logger.addHandler(handler)
 ########################
 # Helper functions
 ########################
+
+
 
 def get_checkpoint(training_args: GRPOConfig):
     last_checkpoint = None
@@ -65,6 +70,7 @@ def grpo_function(
         ),
         revision=model_args.model_revision,
         trust_remote_code=model_args.trust_remote_code,
+	use_auth_token=True
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -75,66 +81,40 @@ def grpo_function(
     # Load dataset from Hugging Face Hub
     dataset = load_dataset(script_args.dataset_id_or_path, split=script_args.dataset_splits)
     # select a random subset of 50k samples
-    if script_args.task_type == "math":
-        dataset = dataset.shuffle(seed=42)
-    elif script_args.task_type == "poetry":
-        dataset = dataset.shuffle(seed=42)
+    dataset = dataset.shuffle(seed=42).select(range(50000))
+    dataset = add_gold_answer_to_dataset(dataset)
 
     #####################
     # Prepare and format dataset
     #####################
 
-    if script_args.task_type == "math":
-        dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
-    elif script_args.task_type == "poetry":
-        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
-    
-    print(f"Dataset size: {len(dataset)}")
-    print(f"Dataset sample: {dataset[0]}")
+    # convert our dataset to the r1 prompt
+    dataset = dataset.map(lambda x: generate_r1_prompt(tokenizer, x["nums"], x["target"]))
 
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)
 
     train_dataset = train_test_split["train"]
     test_dataset = train_test_split["test"]
-    
-    logger.info(f"Train example : {train_dataset[0]}")
-
-    # Setup rewards with normalization
-    logger.info(f"Using normalization method: {script_args.normalization}")
-    
-    # Create reward functions with the normalization parameter
-    format_reward_with_norm = partial(format_reward_func, normalization="none")
-    equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
-    
-    # Add __name__ attributes to the partial functions
-    format_reward_with_norm.__name__ = "format_reward_func"
-    equation_reward_with_norm.__name__ = "equation_reward_func"
-    
-
-    
-    if script_args.task_type == "math":
-        reward_functions = [format_reward_with_norm, equation_reward_with_norm]
-        training_args.reward_weights = [0.5, 0.5]
-    elif script_args.task_type == "poetry":
-        sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-        print(f"Sentence_model on device: {sentence_model.device}")
-        similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
-        reward_functions = [format_reward_with_norm, similarity_reward]
-        training_args.reward_weights = [0.5, 0.5]
 
     #########################
-    # Instantiate DPO trainer
+    # Instantiate GRPO trainer
     #########################
-    
-    if script_args.task_type == "math":
-        reward_functions = [format_reward_func, equation_reward_func]
-    elif script_args.task_type == "poetry":
-        reward_functions = [format_reward_func, global_poetry_reward_func]
+    reward_funcs = [format_reward_func, equation_reward_func]
+
+    if script_args.use_logprob_reward:
+        gold_logprob_reward = make_gold_answer_logprob_reward(
+            model_name    = model_args.model_name_or_path,
+            api_base   = script_args.vllm_api_base,
+            tokenizer  = tokenizer,
+            batch_size    = model_args.per_device_train_batch_size, # 8 # tune for your GPU / throughput
+            normalization = script_args.normalization
+        )   
+        reward_funcs.append(gold_logprob_reward)
 
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,
-      reward_funcs=reward_functions,
+      reward_funcs=reward_funcs,
       args=training_args,
       train_dataset=train_dataset,
       eval_dataset=test_dataset,
@@ -147,7 +127,6 @@ def grpo_function(
     if trainer.accelerator.is_main_process:
         logger.info(f"Model parameters {model_args}")
         logger.info(f"Training/evaluation parameters {training_args}")
-        logger.info(f"Using normalization method: {script_args.normalization}")
 
 
     ###############

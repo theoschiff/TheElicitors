@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --chdir /home/barghorn/TheElicitors
+#SBATCH --chdir /home/schiffer/MA4/RL_project/TheElicitors
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:3
-#SBATCH --partition l40s
+#SBATCH --gres=gpu:2
+#SBATCH --partition gpu
 #SBATCH --time=10:0:0
-#SBATCH --account sma-llm-botafogo
+# #SBATCH --account master
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
 #SBATCH --mem 128G
@@ -15,10 +15,6 @@ echo STARTING AT `date`
 module load gcc cuda openmpi python
 
 cd ..
-cd MasterProject/
-source venvs/train/bin/activate
-cd ..
-cd TheElicitors/src
 
 nvcc --version
 
@@ -32,19 +28,18 @@ export TOKENIZERS_PARALLELISM=true
 
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-export HF_HOME="/scratch/barghorn/.cache"
+export HF_HOME="/scratch/bordier/.cache"
 
 python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
 
 export CUDA_VISIBLE_DEVICES=0
-trl vllm-serve --model Qwen/Qwen3-1.7B &
+trl vllm-serve --model google/gemma-3-1b-it &
 
 sleep 120
 echo "Starting GRPO training"
 
-export CUDA_VISIBLE_DEVICES=1,2
+export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
     accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
-
-    train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
+    train/rule_based_grpo.py --config reciepes/rule_based_grpo.yaml
 

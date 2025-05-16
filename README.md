@@ -7,17 +7,19 @@ Eliciting Reasoning in LLMs Using Logprob-Based Rewards done during EE-556 Reinf
 |Jeremmmyyyyy/gemma-3-1b-Math|0.0 |0.0|0.446|0.032|0.13|
 |||||||
 
-MATH :
 
-|Reward|length normalization|z-score|min-max|
-|--------------|--------------|--------|--------|
-|Rule based |||
-|Log Probabilities|||
+### MATH : accuracy score on the test set
+|Reward|no normalization|length normalization|z-score|min-max|
+|--------------|--------------|--------|--------|--------|
+|Baseline|0.0085|-|-|-|
+|Rule based |0.468|||
+|Log Probabilities||||
 
 
-Poetry :
+### Poetry : average rewards over all the samples in the test set
+|Reward|no normalization|length normalization|z-score|min-max|
+|--------------|--------------|--------|--------|--------|
+|Rule based ||||
+|Log Probabilities||||
 
-|Reward|length normalization|z-score|min-max|
-|--------------|--------------|--------|--------|
-|Rule based |||
-|Log Probabilities|||
+

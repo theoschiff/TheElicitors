@@ -9,3 +9,4 @@ trl[vllm]
 rewards
 dataclasses
 lighteval
+torch

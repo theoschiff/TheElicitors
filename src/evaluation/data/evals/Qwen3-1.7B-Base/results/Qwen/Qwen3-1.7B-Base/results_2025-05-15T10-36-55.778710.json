@@ -2,13 +2,12 @@
   "config_general": {
     "lighteval_sha": "?",
     "num_fewshot_seeds": 1,
-    "override_batch_size": -1,
     "max_samples": null,
     "job_id": 0,
-    "start_time": 6631.460217132,
-    "end_time": 6887.235088136,
-    "total_evaluation_time_secondes": "255.77487100399958",
-    "model_name": "google/gemma-3-1b-it",
+    "start_time": 3010.023629077,
+    "end_time": 3978.519328367,
+    "total_evaluation_time_secondes": "968.4956992900002",
+    "model_name": "Qwen/Qwen3-1.7B-Base",
     "model_sha": "",
     "model_dtype": null,
     "model_size": null,
@@ -18,7 +17,7 @@
       "frequency_penalty": null,
       "length_penalty": null,
       "presence_penalty": null,
-      "max_new_tokens": 8192,
+      "max_new_tokens": 2048,
       "min_new_tokens": null,
       "seed": null,
       "stop_tokens": null,
@@ -31,32 +30,34 @@
     }
   },
   "results": {
-    "custom|math_500|0": {
-      "extractive_match": 0.434,
-      "extractive_match_stderr": 0.02218721580302901
+    "custom|math_calculation|0": {
+      "format_score": 0.002,
+      "equation_score": 0.013,
+      "avg_score": 0.0075
     },
     "all": {
-      "extractive_match": 0.434,
-      "extractive_match_stderr": 0.02218721580302901
+      "format_score": 0.002,
+      "equation_score": 0.013,
+      "avg_score": 0.0075
     }
   },
   "versions": {
-    "custom|math_500|0": 1
+    "custom|math_calculation|0": 1
   },
   "config_tasks": {
-    "custom|math_500": {
-      "name": "math_500",
-      "prompt_function": "math_prompt_fn",
-      "hf_repo": "HuggingFaceH4/MATH-500",
+    "custom|math_calculation": {
+      "name": "math_calculation",
+      "prompt_function": "math_calculation_prompt_fn",
+      "hf_repo": "Jeremmmyyyyy/math",
       "hf_subset": "default",
       "metric": [
         {
-          "metric_name": "extractive_match",
+          "metric_name": "math_calculation",
           "higher_is_better": true,
           "category": "3",
           "use_case": "1",
-          "sample_level_fn": "sample_level_fn",
-          "corpus_level_fn": "mean"
+          "sample_level_fn": "math_calculation_metric",
+          "corpus_level_fn": "corpus_level_fn"
         }
       ],
       "hf_revision": null,
@@ -70,46 +71,46 @@
       ],
       "few_shots_split": null,
       "few_shots_select": null,
-      "generation_size": 8192,
+      "generation_size": 2048,
       "generation_grammar": null,
       "stop_sequence": [],
       "num_samples": null,
       "suite": [
         "custom"
       ],
-      "original_num_docs": 500,
-      "effective_num_docs": 500,
+      "original_num_docs": 1000,
+      "effective_num_docs": 1000,
       "must_remove_duplicate_docs": false,
       "version": 1
     }
   },
   "summary_tasks": {
-    "custom|math_500|0": {
+    "custom|math_calculation|0": {
       "hashes": {
-        "hash_examples": "adf0cc8311011db2",
-        "hash_full_prompts": "42d4df193b7b4610",
-        "hash_input_tokens": "800aaaba6c8c5a4c",
-        "hash_cont_tokens": "8988169f1c11f0e1"
+        "hash_examples": "585a3df519df0af0",
+        "hash_full_prompts": "6843acf5f43863d5",
+        "hash_input_tokens": "d87d6c2ecd8049bd",
+        "hash_cont_tokens": "c21152f990be5b9a"
       },
       "truncated": 0,
-      "non_truncated": 500,
+      "non_truncated": 1000,
       "padded": 0,
-      "non_padded": 500,
+      "non_padded": 1000,
       "effective_few_shots": 0.0,
       "num_truncated_few_shots": 0
     }
   },
   "summary_general": {
     "hashes": {
-      "hash_examples": "bfaad1993ff37a60",
-      "hash_full_prompts": "bed9e329deac30d4",
-      "hash_input_tokens": "27544346da564dab",
-      "hash_cont_tokens": "f7dc7cee3634014d"
+      "hash_examples": "f964cdd168af095b",
+      "hash_full_prompts": "0af6ea6bf9a57b03",
+      "hash_input_tokens": "de37f080cfbf86cc",
+      "hash_cont_tokens": "f6183814647834a9"
     },
     "truncated": 0,
-    "non_truncated": 500,
+    "non_truncated": 1000,
     "padded": 0,
-    "non_padded": 500,
+    "non_padded": 1000,
     "num_truncated_few_shots": 0
   }
 }
