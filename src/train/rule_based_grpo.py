@@ -10,10 +10,11 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, equation_reward_func, sentence_similarity_reward_func
+from rewards import format_reward_func, equation_reward_func, global_poetry_reward_func, sentence_similarity_reward_func
 from sentence_transformers import SentenceTransformer, util
 from functools import partial
 from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
+
 
 ########################
 # Custom dataclasses
@@ -82,6 +83,7 @@ def grpo_function(
     #####################
     # Prepare and format dataset
     #####################
+
     if script_args.task_type == "math":
         dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
     elif script_args.task_type == "poetry":
@@ -89,11 +91,14 @@ def grpo_function(
     
     print(f"Dataset size: {len(dataset)}")
     print(f"Dataset sample: {dataset[0]}")
+
     # split the dataset into train and test
     train_test_split = dataset.train_test_split(test_size=0.1)
 
     train_dataset = train_test_split["train"]
     test_dataset = train_test_split["test"]
+    
+    logger.info(f"Train example : {train_dataset[0]}")
 
     # Setup rewards with normalization
     logger.info(f"Using normalization method: {script_args.normalization}")
@@ -121,6 +126,11 @@ def grpo_function(
     #########################
     # Instantiate DPO trainer
     #########################
+    
+    if script_args.task_type == "math":
+        reward_functions = [format_reward_func, equation_reward_func]
+    elif script_args.task_type == "poetry":
+        reward_functions = [format_reward_func, global_poetry_reward_func]
 
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,

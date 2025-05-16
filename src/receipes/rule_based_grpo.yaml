@@ -4,8 +4,21 @@ model_revision: main
 torch_dtype: bfloat16
 attn_implementation: flash_attention_2
 bf16: true
-tf32: true
-output_dir: /scratch/barghorn/Qwen/Qwen3-1.7B/Qwen-math-no-normalization
+
+tf32: false
+# set in the terminal before training:
+# export HF_USERNAME=your_hf_username 
+# output_dir: /scratch/${HF_USERNAME}/google/gemma-3-1b-it/poetry
+output_dir: /scratch/schifferlearning/Qwen/Qwen3-1.7B/Qwen-math-no-normalization
+
+# Dataset arguments
+# task_type: math
+task_type: poetry
+# dataset_id_or_path: Jiayi-Pan/Countdown-Tasks-3to4 #For math task
+dataset_id_or_path: schifferlearning/Poetry-Categorized #For poetry task
+
+# Training arguments
+epochs: 5
 
 # Dataset arguments
 task_type: math
@@ -14,6 +27,7 @@ nomalization: none
 
 # Training arguments
 num_train_epochs: 2
+
 per_device_train_batch_size: 8
 gradient_accumulation_steps: 8
 gradient_checkpointing: true
@@ -24,9 +38,11 @@ lr_scheduler_type: cosine
 warmup_ratio: 0.03
 # GRPO specific parameters
 beta: 0.001 # 0.04 as in the deepseek math paper 0.001 from https://hijkzzz.notion.site/unraveling-rlhf-and-its-variants-engineering-insights#147d9a33ecc9806090f3d5c749d31f05
+
 max_prompt_length: 256
 max_completion_length: 1024
 num_generations: 4
+
 use_vllm: true
 vllm_gpu_memory_utilization: 0.9
 resume_from_checkpoint: false

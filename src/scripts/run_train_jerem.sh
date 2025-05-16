@@ -45,4 +45,6 @@ echo "Starting GRPO training"
 export CUDA_VISIBLE_DEVICES=1,2
 ACCELERATE_LOG_LEVEL=info \
     accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
+
     train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
+
