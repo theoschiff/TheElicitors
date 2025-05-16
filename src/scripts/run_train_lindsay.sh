@@ -2,7 +2,7 @@
 #SBATCH --chdir=/home/bordier/TheElicitors
 #SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --partition=test
 #SBATCH --time=10:00:00
 #SBATCH --cpus-per-task=32
@@ -51,5 +51,5 @@ ls
 # Stage 2: GRPO Training
 export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
-accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
+accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 1 \
     train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
