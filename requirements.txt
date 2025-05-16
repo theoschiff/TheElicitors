@@ -8,3 +8,5 @@ rewards
 dataclasses
 lighteval
 torch
+sentence-transformers
+hf_transfer
