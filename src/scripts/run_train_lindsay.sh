@@ -40,6 +40,9 @@ trl vllm-serve --model Qwen/Qwen3-1.7B &
 sleep 120
 echo "Starting GRPO training"
 
+# Get in correct src directory
+cd ..
+
 # Stage 2: GRPO Training
 export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
