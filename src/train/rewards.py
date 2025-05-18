@@ -159,6 +159,96 @@ def equation_reward_func(completions, target, nums, normalization="none", **kwar
     
     return rewards
 
+def make_gold_answer_logprob_reward(
+    api_base: str,
+    model_name: str,
+    tokenizer,
+    batch_size: int = 8,
+    normalization: str = "none",
+):
+    """
+    Returns a reward function that takes:
+      - prompts: List[str]
+      - completions: List[str]    (with <think>…</think><answer>…</answer>)
+      - gold_answers: List[str]
+    and returns List[float] of log-probs for target under the current policy
+    served by your vLLM HTTP server.
+    
+    Args:
+        api_base: URL for the vLLM server
+        model_name: Name of the model to use
+        tokenizer: HuggingFace tokenizer
+        batch_size: Batch size for processing
+        normalization: Type of normalization to apply ('none', 'token-level', 'z-score', 'min-max')
+    
+    Returns:
+        function: Reward function
+    """
+    # configure OpenAI-compatible client
+    openai.api_base = api_base.rstrip("/") + "/v1"
+    openai.api_key = ""
+    
+    def reward_fn(
+        prompts: List[str],
+        completions: List[str],
+        gold_answers: List[str],
+        **kwargs,  # any extra dataset fields are ignored
+    ) -> List[float]:
+        rewards = []
+        token_counts = []  # For token-level normalization
+        
+        # process in batches
+        for i in range(0, len(prompts), batch_size):
+            slice_end = i + batch_size
+            ctxs = []
+            
+            # build each context = prompt + reasoning + "</think>\n"
+            for prompt, completion, gold_answer in zip(
+                prompts[i:slice_end], 
+                completions[i:slice_end], 
+                gold_answers[i:slice_end]
+            ):
+                m = re.search(r"<think>([\s\S]*?)</think>", completion)
+                reasoning = m.group(1) if m else ""
+                
+                ctxs.append(prompt + reasoning + "</think>\n<answer>" + gold_answer + "</answer>")
+            
+            # call vLLM in one go
+            resp = openai.Completion.create(
+                model = model_name,
+                prompt = ctxs,    # list of strings
+                max_tokens = 0,   # no new tokens
+                echo = True,      # return logprobs for all input tokens
+                logprobs = 1,
+            )
+            
+            # extract per-example rewards
+            for choice, gold_answer in zip(resp.choices, gold_answers[i:slice_end]):
+                token_logprobs = choice.logprobs.token_logprobs
+                
+                # how many logprobs correspond to the gold_answer?
+                ans_ids = tokenizer(
+                    "<answer>" + gold_answer + "</answer>",
+                    add_special_tokens=False
+                ).input_ids
+                n = len(ans_ids)
+                
+                # Store the raw reward (sum of logprobs)
+                reward = sum(token_logprobs[-n:])
+                rewards.append(reward)
+                
+                # Store token count for token-level normalization
+                token_counts.append(n)
+        
+        # Apply normalization using the defined function
+        rewards = normalize_rewards(rewards, normalization, token_counts if normalization == "token-level" else None)
+        
+        return rewards
+    
+    return reward_fn
+
+
+
 
 # -- Poetry-specific functions --
 
@@ -366,97 +456,6 @@ def global_poetry_reward_func(
 
 # -- end of poetry-specific functions --
 
-
-def make_gold_answer_logprob_reward(
-    api_base: str,
-    model_name: str,
-    tokenizer,
-    batch_size: int = 8,
-    normalization: str = "none",
-):
-    """
-    Returns a reward function that takes:
-      - prompts: List[str]
-      - completions: List[str]    (with <think>…</think><answer>…</answer>)
-      - gold_answers: List[str]
-    and returns List[float] of log-probs for target under the current policy
-    served by your vLLM HTTP server.
-    
-    Args:
-        api_base: URL for the vLLM server
-        model_name: Name of the model to use
-        tokenizer: HuggingFace tokenizer
-        batch_size: Batch size for processing
-        normalization: Type of normalization to apply ('none', 'token-level', 'z-score', 'min-max')
-    
-    Returns:
-        function: Reward function
-    """
-    # configure OpenAI-compatible client
-    openai.api_base = api_base.rstrip("/") + "/v1"
-    openai.api_key = ""
-    
-    def reward_fn(
-        prompts: List[str],
-        completions: List[str],
-        gold_answers: List[str],
-        **kwargs,  # any extra dataset fields are ignored
-    ) -> List[float]:
-        rewards = []
-        token_counts = []  # For token-level normalization
-        
-        # process in batches
-        for i in range(0, len(prompts), batch_size):
-            slice_end = i + batch_size
-            ctxs = []
-            
-            # build each context = prompt + reasoning + "</think>\n"
-            for prompt, completion, gold_answer in zip(
-                prompts[i:slice_end], 
-                completions[i:slice_end], 
-                gold_answers[i:slice_end]
-            ):
-                m = re.search(r"<think>([\s\S]*?)</think>", completion)
-                reasoning = m.group(1) if m else ""
-                
-                ctxs.append(prompt + reasoning + "</think>\n<answer>" + gold_answer + "</answer>")
-            
-            # call vLLM in one go
-            resp = openai.Completion.create(
-                model = model_name,
-                prompt = ctxs,    # list of strings
-                max_tokens = 0,   # no new tokens
-                echo = True,      # return logprobs for all input tokens
-                logprobs = 1,
-            )
-            
-            # extract per-example rewards
-            for choice, gold_answer in zip(resp.choices, gold_answers[i:slice_end]):
-                token_logprobs = choice.logprobs.token_logprobs
-                
-                # how many logprobs correspond to the gold_answer?
-                ans_ids = tokenizer(
-                    "<answer>" + gold_answer + "</answer>",
-                    add_special_tokens=False
-                ).input_ids
-                n = len(ans_ids)
-                
-                # Store the raw reward (sum of logprobs)
-                reward = sum(token_logprobs[-n:])
-                rewards.append(reward)
-                
-                # Store token count for token-level normalization
-                token_counts.append(n)
-        
-        # Apply normalization based on the specified method
-        if normalization == "token-level":
-            rewards = normalize_rewards(rewards, normalization, token_counts)
-        elif normalization != "none":
-            rewards = normalize_rewards(rewards, normalization)
-        
-        return rewards
-    
-    return reward_fn
 
 
 # Load the model once globally

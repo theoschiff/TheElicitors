@@ -1,7 +1,7 @@
 def generate_r1_math_prompt(tokenizer, numbers, target):
   r1_prefix = [{
       "role": "system",
-      "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
+      "content": "You are a helpful assistant. You first think about the reasoning process in the mind and then provide the user with the answer."
     },
     { 
       "role": "user",
@@ -17,7 +17,7 @@ def generate_r1_math_prompt(tokenizer, numbers, target):
 def generate_r1_poetry_prompt(tokenizer, author, title, poem_start):
     r1_prefix = [{
         "role": "system",
-        "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
+        "content": "You are a helpful assistant. You first think about the reasoning process in the mind and then provide the user with the answer."
     },
     { 
         "role": "user",
