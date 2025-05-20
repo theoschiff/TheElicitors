@@ -121,7 +121,7 @@ def grpo_function(
         print(f"Sentence_model on device: {sentence_model.device}")
         similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
         reward_functions = [format_reward_with_norm, similarity_reward, reward_poem_form, rhyme_accuracy, syllable_accuracy]
-        training_args.reward_weights = [0.1, 0.25, 0.25, 0.15, 0.25]
+        training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
 
     #########################
     # Instantiate DPO trainer
