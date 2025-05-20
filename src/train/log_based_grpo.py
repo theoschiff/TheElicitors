@@ -7,7 +7,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, equation_reward_func, global_poetry_reward_func, make_gold_answer_logprob_reward, sentence_similarity_reward_func
+from rewards import format_reward_func, global_poetry_reward_func, make_gold_answer_logprob_reward, sentence_similarity_reward_func
 from sentence_transformers import SentenceTransformer
 from functools import partial
 from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
@@ -101,23 +101,21 @@ def grpo_log_based_function(
     
     # Create reward functions with the normalization parameter
     format_reward_with_norm = partial(format_reward_func, normalization="none")
-    equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
-    
+
     # Add __name__ attributes to the partial functions
     format_reward_with_norm.__name__ = "format_reward_func"
-    equation_reward_with_norm.__name__ = "equation_reward_func"
 
     reward_functions = []
 
     if script_args.task_type == "math":
-        reward_functions = [format_reward_with_norm, equation_reward_with_norm]
-        training_args.reward_weights = [0.25, 0.25]
+        reward_functions = [format_reward_with_norm]
+        training_args.reward_weights = [0.5]
     elif script_args.task_type == "poetry":
         sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
         logger.info(f"Sentence model on device: {sentence_model.device}")
         similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
         reward_functions = [format_reward_with_norm, similarity_reward]
-        training_args.reward_weights = [0.25, 0.25]
+        training_args.reward_weights = [0.50]
 
      # Add log-probability-based reward
     gold_logprob_reward = make_gold_answer_logprob_reward(
