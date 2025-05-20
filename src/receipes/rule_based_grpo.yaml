@@ -9,20 +9,12 @@ tf32: false
 # set in the terminal before training:
 # export HF_USERNAME=your_hf_username 
 # output_dir: /scratch/${HF_USERNAME}/google/gemma-3-1b-it/poetry
-output_dir: /scratch/schifferlearning/Qwen/Qwen3-1.7B/Qwen-math-no-normalization
+output_dir: /scratch/barghorn/Qwen/Qwen3-1.7B/Qwen-poetry-no-normalization
 
 # Dataset arguments
-# task_type: math
-task_type: poetry
 # dataset_id_or_path: Jiayi-Pan/Countdown-Tasks-3to4 #For math task
+task_type : poetry
 dataset_id_or_path: schifferlearning/Poetry-Categorized #For poetry task
-
-# Training arguments
-epochs: 5
-
-# Dataset arguments
-task_type: math
-dataset_id_or_path: Jeremmmyyyyy/Math
 nomalization: none
 
 # Training arguments
