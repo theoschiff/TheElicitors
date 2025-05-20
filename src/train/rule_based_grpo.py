@@ -87,7 +87,7 @@ def grpo_function(
     if script_args.task_type == "math":
         dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
     elif script_args.task_type == "poetry":
-        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
+        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(tokenizer, x["author"], x["title"], x["poem_start"], x["form"]))
     
     print(f"Dataset size: {len(dataset)}")
     print(f"Dataset sample: {dataset[0]}")
@@ -103,14 +103,14 @@ def grpo_function(
     # Setup rewards with normalization
     logger.info(f"Using normalization method: {script_args.normalization}")
     
-    # Create reward functions with the normalization parameter
-    format_reward_with_norm = partial(format_reward_func, normalization="none")
-    equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
-    
-    # Add __name__ attributes to the partial functions
+
+    def format_reward_with_norm(*args, **kwargs):
+        return format_reward_func(*args, normalization=script_args.normalization, **kwargs)
+    def equation_reward_with_norm(*args, **kwargs):
+        return equation_reward_func(*args, normalization=script_args.normalization, **kwargs)
+
     format_reward_with_norm.__name__ = "format_reward_func"
     equation_reward_with_norm.__name__ = "equation_reward_func"
-    
 
     
     if script_args.task_type == "math":
@@ -121,7 +121,7 @@ def grpo_function(
         print(f"Sentence_model on device: {sentence_model.device}")
         similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
         reward_functions = [format_reward_with_norm, similarity_reward, reward_poem_form, rhyme_accuracy, syllable_accuracy]
-        training_args.reward_weights = [0.1, 0.25, 0.25, 0.15, 0.25]
+        training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
 
     #########################
     # Instantiate DPO trainer

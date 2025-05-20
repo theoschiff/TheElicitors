@@ -2,8 +2,9 @@ import os
 import random
 import openai
 import re
-import torch 
+import torch
 import nltk
+nltk.download('cmudict')
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from nltk.corpus import cmudict
 from sentence_transformers import SentenceTransformer
@@ -347,7 +348,7 @@ def rhyme_key(word: str):
                 return tuple(pron[i:])
     return None
 
-def rhyme_accuracy(completions, targets, **kwargs) -> float:
+def rhyme_accuracy(completions, targets, normalization="none", **kwargs) -> float:
     """
     A line is 'correct' if its end-word rhymes with the end-word of the
     corresponding reference line (same CMU rhyme key).
@@ -389,12 +390,15 @@ def rhyme_accuracy(completions, targets, **kwargs) -> float:
             print(f"[sentence_reward] Error on pair {i}: {e}")
             rewards.append(0.0)
             
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
+            
     return rewards
 
 
     
 
-def syllable_accuracy(completions, targets, **kwargs) -> float:
+def syllable_accuracy(completions, targets, normalization="none", **kwargs) -> float:
     """
     Per-line accuracy = 1 - |Δ syllables| / ref_syllables  (floored at 0).
     Overall score is the mean across comparable lines.
@@ -437,7 +441,7 @@ def syllable_accuracy(completions, targets, **kwargs) -> float:
             
     return rewards
 
-def reward_poem_form(completions, targets, **kwargs):
+def reward_poem_form(completions, targets, normalization="none", **kwargs):
     """
     Binary reward: 1 if the *combined* poem (reference beginning + generation)
     has the same detected form as the gold full poem, else 0.
@@ -465,10 +469,13 @@ def reward_poem_form(completions, targets, **kwargs):
             print(f"[sentence_reward] Error on pair {i}: {e}")
             rewards.append(0.0)
             
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
+            
     return rewards
 
 
-def sentence_similarity_reward_func(completions, targets, sentence_model=None, **kwargs):
+def sentence_similarity_reward_func(completions, targets, sentence_model=None, normalization="none", **kwargs):
     """
     Computes cosine similarity between predicted and target answers using a shared embedding model.
     Assumes format: <think>...</think>\n<answer>...</answer>
@@ -518,6 +525,9 @@ def sentence_similarity_reward_func(completions, targets, sentence_model=None, *
             reward = max(0.0, cosine_sim)
             print("Reward: ", reward)
             rewards[i] = reward
+            
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
 
     return rewards
 
