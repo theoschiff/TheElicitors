@@ -106,7 +106,8 @@ def grpo_function(
 
     format_reward_with_norm = partial(format_reward_func, normalization=script_args.normalization)
     equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
-    similarity_reward_with_norm = partial(sentence_similarity_reward_func, normalization=script_args.normalization)
+    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+    similarity_reward_with_norm = partial(sentence_similarity_reward_func, normalization=script_args.normalization, sentence_model=sentence_model)
     reward_poem_form_with_norm = partial(reward_poem_form, normalization=script_args.normalization)
     rhyme_accuracy_with_norm = partial(rhyme_accuracy, normalization=script_args.normalization)
     syllable_accuracy_with_norm = partial(syllable_accuracy, normalization=script_args.normalization)
@@ -123,9 +124,6 @@ def grpo_function(
         reward_functions = [format_reward_with_norm, equation_reward_with_norm]
         training_args.reward_weights = [0.5, 0.5]
     elif script_args.task_type == "poetry":
-        sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-        print(f"Sentence_model on device: {sentence_model.device}")
-        similarity_reward_with_norm = partial(similarity_reward_with_norm, sentence_model=sentence_model)
         reward_functions = [format_reward_with_norm, similarity_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
         training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
 

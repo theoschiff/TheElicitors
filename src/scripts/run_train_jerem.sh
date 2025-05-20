@@ -39,7 +39,7 @@ python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
 export CUDA_VISIBLE_DEVICES=0
 trl vllm-serve --model Qwen/Qwen3-1.7B &
 
-sleep 120
+# sleep 120
 echo "Starting GRPO training"
 
 export CUDA_VISIBLE_DEVICES=1

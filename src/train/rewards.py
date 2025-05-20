@@ -68,7 +68,7 @@ def format_reward_func(completions, target=None, poem_end=None, normalization="n
     """
     rewards = []
 
-    for completion, gt in zip(completions):
+    for completion in completions:
 
       try:
         # add synthetic <think> as its already part of the prompt and prefilled for the assistant to more easily match the regex
