@@ -104,10 +104,8 @@ def grpo_function(
     logger.info(f"Using normalization method: {script_args.normalization}")
     
 
-    def format_reward_with_norm(*args, **kwargs):
-        return format_reward_func(*args, normalization=script_args.normalization, **kwargs)
-    def equation_reward_with_norm(*args, **kwargs):
-        return equation_reward_func(*args, normalization=script_args.normalization, **kwargs)
+    format_reward_with_norm = partial(format_reward_func, normalization="none")
+    equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
 
     format_reward_with_norm.__name__ = "format_reward_func"
     equation_reward_with_norm.__name__ = "equation_reward_func"
@@ -120,6 +118,7 @@ def grpo_function(
         sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
         print(f"Sentence_model on device: {sentence_model.device}")
         similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
+        similarity_reward.__name__ = "sentence_similarity_reward_func"
         reward_functions = [format_reward_with_norm, similarity_reward, reward_poem_form, rhyme_accuracy, syllable_accuracy]
         training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
 
