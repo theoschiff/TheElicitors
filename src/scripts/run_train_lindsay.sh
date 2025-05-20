@@ -52,4 +52,4 @@ ls
 export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
 accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 1 \
-    train/log_based_grpo.py --config receipes/log_based_grpo.yaml
+    train/log_based_grpo.py --config reciepes/log_based_grpo.yaml
