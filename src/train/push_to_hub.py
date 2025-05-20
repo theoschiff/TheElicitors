@@ -12,4 +12,4 @@ local_path = "/scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-normalization-toke
 
 model = AutoModel.from_pretrained(local_path, from_tf=False)
 
-model.push_to_hub("HF_USERNAME/model_name", private=False, token=os.getenv("HF_TOKEN"))
+model.push_to_hub("lindsaybordier/Qwen-math-normalization-token_level", private=False, token=os.getenv("HF_TOKEN"))
