@@ -87,7 +87,7 @@ def grpo_function(
     if script_args.task_type == "math":
         dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
     elif script_args.task_type == "poetry":
-        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
+        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(tokenizer, x["author"], x["title"], x["poem_start"], x["form"]))
     
     print(f"Dataset size: {len(dataset)}")
     print(f"Dataset sample: {dataset[0]}")
@@ -103,25 +103,29 @@ def grpo_function(
     # Setup rewards with normalization
     logger.info(f"Using normalization method: {script_args.normalization}")
     
-    # Create reward functions with the normalization parameter
-    format_reward_with_norm = partial(format_reward_func, normalization="none")
+
+    format_reward_with_norm = partial(format_reward_func, normalization=script_args.normalization)
     equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
-    
-    # Add __name__ attributes to the partial functions
+    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+    similarity_reward_with_norm = partial(sentence_similarity_reward_func, normalization=script_args.normalization, sentence_model=sentence_model)
+    reward_poem_form_with_norm = partial(reward_poem_form, normalization=script_args.normalization)
+    rhyme_accuracy_with_norm = partial(rhyme_accuracy, normalization=script_args.normalization)
+    syllable_accuracy_with_norm = partial(syllable_accuracy, normalization=script_args.normalization)
+
     format_reward_with_norm.__name__ = "format_reward_func"
     equation_reward_with_norm.__name__ = "equation_reward_func"
-    
+    similarity_reward_with_norm.__name__ = "sentence_similarity_reward_func"
+    reward_poem_form_with_norm.__name__ = "reward_poem_form"
+    rhyme_accuracy_with_norm.__name__ = "rhyme_accuracy"
+    syllable_accuracy_with_norm.__name__ = "syllable_accuracy"
 
     
     if script_args.task_type == "math":
         reward_functions = [format_reward_with_norm, equation_reward_with_norm]
         training_args.reward_weights = [0.5, 0.5]
     elif script_args.task_type == "poetry":
-        sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-        print(f"Sentence_model on device: {sentence_model.device}")
-        similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
-        reward_functions = [format_reward_with_norm, similarity_reward, reward_poem_form, rhyme_accuracy, syllable_accuracy]
-        training_args.reward_weights = [0.1, 0.25, 0.25, 0.15, 0.25]
+        reward_functions = [format_reward_with_norm, similarity_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
+        training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
 
     #########################
     # Instantiate DPO trainer

@@ -55,7 +55,7 @@ def normalize_rewards(rewards, normalization_type="none", token_counts=None):
     return normalized_rewards
 
 
-def format_reward_func(completions, target, normalization="none", **kwargs):
+def format_reward_func(completions, target=None, poem_end=None, normalization="none", **kwargs):
     """
     Format: <think>...</think><answer>...</answer>
     Args:
@@ -68,7 +68,7 @@ def format_reward_func(completions, target, normalization="none", **kwargs):
     """
     rewards = []
 
-    for completion, gt in zip(completions):
+    for completion in completions:
 
       try:
         # add synthetic <think> as its already part of the prompt and prefilled for the assistant to more easily match the regex
@@ -348,7 +348,7 @@ def rhyme_key(word: str):
                 return tuple(pron[i:])
     return None
 
-def rhyme_accuracy(completions, targets, **kwargs) -> float:
+def rhyme_accuracy(completions, target=None,  poem_end=None, normalization="none", **kwargs) -> float:
     """
     A line is 'correct' if its end-word rhymes with the end-word of the
     corresponding reference line (same CMU rhyme key).
@@ -358,7 +358,9 @@ def rhyme_accuracy(completions, targets, **kwargs) -> float:
     
     regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
     
-    for i, (completion, target) in enumerate(zip(completions, targets)):
+    real_target = target if target is not None else poem_end
+    
+    for i, (completion, target) in enumerate(zip(completions, real_target)):
         try:
             completion = "<think>" + completion
             match = re.search(regex, completion, re.DOTALL)
@@ -390,12 +392,15 @@ def rhyme_accuracy(completions, targets, **kwargs) -> float:
             print(f"[sentence_reward] Error on pair {i}: {e}")
             rewards.append(0.0)
             
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
+            
     return rewards
 
 
     
 
-def syllable_accuracy(completions, targets, **kwargs) -> float:
+def syllable_accuracy(completions, target=None,  poem_end=None, normalization="none", **kwargs) -> float:
     """
     Per-line accuracy = 1 - |Δ syllables| / ref_syllables  (floored at 0).
     Overall score is the mean across comparable lines.
@@ -405,7 +410,9 @@ def syllable_accuracy(completions, targets, **kwargs) -> float:
     
     regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
     
-    for i, (completion, target) in enumerate(zip(completions, targets)):
+    real_target = target if target is not None else poem_end
+    
+    for i, (completion, target) in enumerate(zip(completions, real_target)):
         try:
             completion = "<think>" + completion
             match = re.search(regex, completion, re.DOTALL)
@@ -438,7 +445,7 @@ def syllable_accuracy(completions, targets, **kwargs) -> float:
             
     return rewards
 
-def reward_poem_form(completions, targets, **kwargs):
+def reward_poem_form(completions, target=None, poem_end=None, normalization="none", **kwargs):
     """
     Binary reward: 1 if the *combined* poem (reference beginning + generation)
     has the same detected form as the gold full poem, else 0.
@@ -447,7 +454,9 @@ def reward_poem_form(completions, targets, **kwargs):
     
     regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
     
-    for i, (completion, target) in enumerate(zip(completions, targets)):
+    real_target = target if target is not None else poem_end
+    
+    for i, (completion, target) in enumerate(zip(completions, real_target)):
         try:
             completion = "<think>" + completion
             match = re.search(regex, completion, re.DOTALL)
@@ -466,10 +475,13 @@ def reward_poem_form(completions, targets, **kwargs):
             print(f"[sentence_reward] Error on pair {i}: {e}")
             rewards.append(0.0)
             
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
+            
     return rewards
 
 
-def sentence_similarity_reward_func(completions, targets, sentence_model=None, **kwargs):
+def sentence_similarity_reward_func(completions, target = None, poem_end=None, sentence_model=None, normalization="none", **kwargs):
     """
     Computes cosine similarity between predicted and target answers using a shared embedding model.
     Assumes format: <think>...</think>\n<answer>...</answer>
@@ -483,8 +495,10 @@ def sentence_similarity_reward_func(completions, targets, sentence_model=None, *
     to_encode = []
 
     valid_pairs = []  # Stores indices of valid completions
+    
+    real_target = target if target is not None else poem_end
 
-    for i, (completion, target) in enumerate(zip(completions, targets)):
+    for i, (completion, target) in enumerate(zip(completions, real_target)):
         try:
             completion = "<think>" + completion
             match = re.search(regex, completion, re.DOTALL)
@@ -519,6 +533,9 @@ def sentence_similarity_reward_func(completions, targets, sentence_model=None, *
             reward = max(0.0, cosine_sim)
             print("Reward: ", reward)
             rewards[i] = reward
+            
+    if normalization != "none" and normalization != "token-level":
+        rewards = normalize_rewards(rewards, normalization)
 
     return rewards
 

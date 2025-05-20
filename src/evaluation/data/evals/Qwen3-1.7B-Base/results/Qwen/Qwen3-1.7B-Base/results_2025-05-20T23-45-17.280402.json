@@ -1,0 +1,122 @@
+{
+  "config_general": {
+    "lighteval_sha": "?",
+    "num_fewshot_seeds": 1,
+    "max_samples": null,
+    "job_id": 0,
+    "start_time": 55053.521743405,
+    "end_time": 55288.608095326,
+    "total_evaluation_time_secondes": "235.08635192100337",
+    "model_name": "Qwen/Qwen3-1.7B-Base",
+    "model_sha": "",
+    "model_dtype": null,
+    "model_size": null,
+    "generation_parameters": {
+      "early_stopping": null,
+      "repetition_penalty": null,
+      "frequency_penalty": null,
+      "length_penalty": null,
+      "presence_penalty": null,
+      "max_new_tokens": 2048,
+      "min_new_tokens": null,
+      "seed": null,
+      "stop_tokens": null,
+      "temperature": 0.6,
+      "top_k": null,
+      "min_p": null,
+      "top_p": 0.95,
+      "truncate_prompt": null,
+      "response_format": null
+    }
+  },
+  "results": {
+    "custom|poetry_calculation|0": {
+      "format_score": 0.0,
+      "similarity_score": 0.0,
+      "reward_poem_form_score": 0.0,
+      "rhyme_accuracy_score": 0.0,
+      "syllable_accuracy_score": 0.0,
+      "agg_score": 0.0
+    },
+    "all": {
+      "format_score": 0.0,
+      "similarity_score": 0.0,
+      "reward_poem_form_score": 0.0,
+      "rhyme_accuracy_score": 0.0,
+      "syllable_accuracy_score": 0.0,
+      "agg_score": 0.0
+    }
+  },
+  "versions": {
+    "custom|poetry_calculation|0": 1
+  },
+  "config_tasks": {
+    "custom|poetry_calculation": {
+      "name": "poetry_calculation",
+      "prompt_function": "poetry_calculation_prompt_fn",
+      "hf_repo": "schifferlearning/Poetry-Categorized",
+      "hf_subset": "default",
+      "metric": [
+        {
+          "metric_name": "poetry_calculation",
+          "higher_is_better": true,
+          "category": "3",
+          "use_case": "1",
+          "sample_level_fn": "poetry_calculation_metric",
+          "corpus_level_fn": "corpus_level_fn_poetry"
+        }
+      ],
+      "hf_revision": null,
+      "hf_filter": null,
+      "hf_avail_splits": [
+        "test"
+      ],
+      "trust_dataset": false,
+      "evaluation_splits": [
+        "test"
+      ],
+      "few_shots_split": null,
+      "few_shots_select": null,
+      "generation_size": 2048,
+      "generation_grammar": null,
+      "stop_sequence": [],
+      "num_samples": null,
+      "suite": [
+        "custom"
+      ],
+      "original_num_docs": 320,
+      "effective_num_docs": 320,
+      "must_remove_duplicate_docs": false,
+      "version": 1
+    }
+  },
+  "summary_tasks": {
+    "custom|poetry_calculation|0": {
+      "hashes": {
+        "hash_examples": "8108899e3803f0bf",
+        "hash_full_prompts": "860d455aebd8ea3d",
+        "hash_input_tokens": "74ebc2e9e6970625",
+        "hash_cont_tokens": "b9dcd3921ae5c3d6"
+      },
+      "truncated": 0,
+      "non_truncated": 320,
+      "padded": 0,
+      "non_padded": 320,
+      "effective_few_shots": 0.0,
+      "num_truncated_few_shots": 0
+    }
+  },
+  "summary_general": {
+    "hashes": {
+      "hash_examples": "edaa13eb5494ba50",
+      "hash_full_prompts": "e987b71c3b094ed3",
+      "hash_input_tokens": "651f7c2b0de9fcdb",
+      "hash_cont_tokens": "a5d075c76782ab87"
+    },
+    "truncated": 0,
+    "non_truncated": 320,
+    "padded": 0,
+    "non_padded": 320,
+    "num_truncated_few_shots": 0
+  }
+}
