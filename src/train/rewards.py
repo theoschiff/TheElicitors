@@ -2,8 +2,9 @@ import os
 import random
 import openai
 import re
-import torch 
+import torch
 import nltk
+nltk.download('cmudict')
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from nltk.corpus import cmudict
 from sentence_transformers import SentenceTransformer
