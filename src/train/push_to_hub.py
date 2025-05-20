@@ -8,7 +8,7 @@ import os
 # python src/train/push_to_hub.py
 
 
-local_path = "scratch..."
+local_path = "/scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-normalization-token_level"
 
 model = AutoModel.from_pretrained(local_path, from_tf=False)
 
