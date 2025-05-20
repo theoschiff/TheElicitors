@@ -22,8 +22,8 @@ Using the numbers {numbers}, create an equation that equals {target}. You can us
 """.strip()
 
 POETRY_QUERY_TEMPLATE = """
-Using the author name : {author}, the title : {title} and the start of an existing poem that is as follows : {poem_start}, create a new ending for this poem. You need to take into account the form, the rhymes, the syllables and theme to create a new realistic ending. Show your work in <think> </think> where you are allowed to thinka bout structure, rhymes, etc. And return the final poem ending in <answer> </answer> tags. Think step by step inside <think> tags.
-"""
+Using the author name : {author}, the title : {title}, the poem form : {form} and the start of an existing poem that is as follows : {poem_start}, create a new ending for this poem. You need to take into account the form the rhymes, the syllables and theme to create a new realistic ending. Show your work in <think> </think> where you are allowed to thinka bout structure, rhymes, etc. And return the final poem ending in <answer> </answer> tags. Think step by step inside <think> tags.
+""".strip()
     
     
 def math_calculation_metric(
@@ -147,7 +147,7 @@ def math_calculation_prompt_fn(line, task_name: str = None):
 def poetry_calculation_prompt_fn(line, task_name: str = None):
     return Doc(
         task_name=task_name,
-        query=POETRY_QUERY_TEMPLATE.format(author=line["author"], title=line["title"], poem_start=line["poem_start"]),
+        query=POETRY_QUERY_TEMPLATE.format(author=line["author"], title=line["title"], poem_start=line["poem_start"], form=line["form"]),
         choices=[line["poem_end"], line["poem_start"], line["author"], line["title"],  line["form"]],
         gold_index=0,
     )
