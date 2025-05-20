@@ -5,7 +5,9 @@ import os
 # export HF_TOKEN="your_key"
 # Sinteract -c 4 -t 0:20:0 -m 32G -p gpu -g gpu:1
 # export HF_HUB_ENABLE_HF_TRANSFER=1
+# module load gcc cuda openmpi
 # python src/train/push_to_hub.py
+
 
 
 local_path = "/scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-normalization-token_level"
