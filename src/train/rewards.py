@@ -7,6 +7,7 @@ import nltk
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from nltk.corpus import cmudict
 from sentence_transformers import SentenceTransformer
+from sentence_transformers import util
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List
 from functools import partial
@@ -66,7 +67,7 @@ def format_reward_func(completions, target, normalization="none", **kwargs):
     """
     rewards = []
 
-    for completion, gt in zip(completions, poem_end):
+    for completion, gt in zip(completions):
 
       try:
         # add synthetic <think> as its already part of the prompt and prefilled for the assistant to more easily match the regex
@@ -346,120 +347,125 @@ def rhyme_key(word: str):
                 return tuple(pron[i:])
     return None
 
-def rhyme_accuracy(gen: str, ref: str) -> float:
+def rhyme_accuracy(completions, targets, **kwargs) -> float:
     """
     A line is 'correct' if its end-word rhymes with the end-word of the
     corresponding reference line (same CMU rhyme key).
     """
-    g_lines = [l for l in gen.strip().splitlines() if l.strip()]
-    r_lines = [l for l in ref.strip().splitlines() if l.strip()]
-    n = min(len(g_lines), len(r_lines))
-    if n == 0:
-        return 0.0
+    
+    rewards = []
+    
+    regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
+    
+    for i, (completion, target) in enumerate(zip(completions, targets)):
+        try:
+            completion = "<think>" + completion
+            match = re.search(regex, completion, re.DOTALL)
+            if match is None or len(match.groups()) != 2:
+                rewards.append(0.0)
+                continue
 
-    hits = 0
-    checked = 0
-    for g, r in zip(g_lines[:n], r_lines[:n]):
-        g_last = re.findall(r"\b\w+\b", g.lower())[-1]
-        r_last = re.findall(r"\b\w+\b", r.lower())[-1]
-        kg, kr = rhyme_key(g_last), rhyme_key(r_last)
-        if kg and kr:                # only score when we have information
-            hits += int(kg == kr)
-            checked += 1
-    return hits / checked if checked else 0.0
+            pred = match.group(2).strip()
+            gold = target.strip()
+            g_lines = [l for l in pred.strip().splitlines() if l.strip()]
+            r_lines = [l for l in gold.strip().splitlines() if l.strip()]
+            n = min(len(g_lines), len(r_lines))
+            if n == 0:
+                rewards.append(0.0)
+                continue
 
-def syllable_accuracy(gen: str, ref: str) -> float:
+            hits = 0
+            checked = 0
+            for g, r in zip(g_lines[:n], r_lines[:n]):
+                g_last = re.findall(r"\b\w+\b", g.lower())[-1]
+                r_last = re.findall(r"\b\w+\b", r.lower())[-1]
+                kg, kr = rhyme_key(g_last), rhyme_key(r_last)
+                if kg and kr:                # only score when we have information
+                    hits += int(kg == kr)
+                    checked += 1
+            rewards.append(hits / checked if checked else 0.0)
+
+        except Exception as e:
+            print(f"[sentence_reward] Error on pair {i}: {e}")
+            rewards.append(0.0)
+            
+    return rewards
+
+
+    
+
+def syllable_accuracy(completions, targets, **kwargs) -> float:
     """
     Per-line accuracy = 1 - |Δ syllables| / ref_syllables  (floored at 0).
     Overall score is the mean across comparable lines.
     """
-    g_lines = [l for l in gen.strip().splitlines() if l.strip()]
-    r_lines = [l for l in ref.strip().splitlines() if l.strip()]
-    n = min(len(g_lines), len(r_lines))
-    if n == 0:
-        return 0.0
+    
+    rewards = []
+    
+    regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
+    
+    for i, (completion, target) in enumerate(zip(completions, targets)):
+        try:
+            completion = "<think>" + completion
+            match = re.search(regex, completion, re.DOTALL)
+            if match is None or len(match.groups()) != 2:
+                rewards.append(0.0)
+                continue
 
-    scores = []
-    for g, r in zip(g_lines[:n], r_lines[:n]):
-        rs = total_syllables(r)
-        if rs == 0:
-            continue
-        diff = abs(total_syllables(g) - rs)
-        scores.append(max(0.0, 1.0 - diff / rs))
+            pred = match.group(2).strip()
+            gold = target.strip()
+            g_lines = [l for l in pred.strip().splitlines() if l.strip()]
+            r_lines = [l for l in gold.strip().splitlines() if l.strip()]
+            n = min(len(g_lines), len(r_lines))
+            if n == 0:
+                rewards.append(0.0)
+                continue
+            
+            scores = []
+            for g, r in zip(g_lines[:n], r_lines[:n]):
+                rs = total_syllables(r)
+                if rs == 0:
+                    continue
+                diff = abs(total_syllables(g) - rs)
+                scores.append(max(0.0, 1.0 - diff / rs))
+                
+            rewards.append(sum(scores) / len(scores) if scores else 0.0)
 
-    return sum(scores) / len(scores) if scores else 0.0
+        except Exception as e:
+            print(f"[sentence_reward] Error on pair {i}: {e}")
+            rewards.append(0.0)
+            
+    return rewards
 
-def reward_poem_form(ref_poem: str, gen_poem: str) -> int:
+def reward_poem_form(completions, targets, **kwargs):
     """
     Binary reward: 1 if the *combined* poem (reference beginning + generation)
     has the same detected form as the gold full poem, else 0.
     """
-    gold_form   = classify_form(ref_poem)
-    test_form   = classify_form(gen_poem)
-    return int(gold_form == test_form)
-    
-
-def embedding_similarity(text, reference, model):
-    """Safely compute semantic similarity between two texts."""
-
-    if not isinstance(text, str) or not isinstance(reference, str):
-        raise ValueError("Both inputs must be strings.")
-
-    if not text.strip() or not reference.strip():
-        return 0.0
-
-    try:
-        text_enc = model.encode([text])
-        reference_enc = model.encode([reference])
-        sim = cosine_similarity([text_enc[0]], [reference_enc[0]])[0][0]
-        return float(sim)
-    except Exception as e:
-        print(f"Error during embedding similarity computation: {e}")
-        return 0.0
-
-
-def global_poetry_reward_func(
-        completions: List[str],
-        poem_end:   List[str],      # the gold continuation
-        ref_start:  List[str],      # pass the given first-third here
-    ) -> List[float]:
-
     rewards = []
-    embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    
+    regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
+    
+    for i, (completion, target) in enumerate(zip(completions, targets)):
+        try:
+            completion = "<think>" + completion
+            match = re.search(regex, completion, re.DOTALL)
+            if match is None or len(match.groups()) != 2:
+                rewards.append(0.0)
+                continue
 
-    # Weights : tweak as you wish, must sum to 1
-    q, r, s, t = 0.30, 0.25, 0.25, 0.20   # sim, form, rhymes, syllables
+            pred = match.group(2).strip()
+            gold = target.strip()
+            gold_form   = classify_form(pred)
+            test_form   = classify_form(gold)
+            
+            rewards.append(int(gold_form == test_form))
 
-    for completion, gold_answer, gold_begin in zip(completions, poem_end, ref_start):
-        gen = extract_answer_text(completion)
-
-        # 1) semantic similarity on the continuation only
-        similarity = embedding_similarity(gen, gold_answer, embed_model)
-
-        # 2) binary structural form (full poem)
-        form_ok = reward_poem_form(gold_begin + gold_answer,
-                                   gold_begin + gen)
-
-        # 3) rhyme & syllable continuums
-        rhyme_score    = rhyme_accuracy(gen, gold_answer)
-        syllable_score = syllable_accuracy(gen, gold_answer)
-
-        final_reward = (
-              q * similarity
-            + r * form_ok
-            + s * rhyme_score
-            + t * syllable_score
-        )
-        rewards.append(final_reward)
-
+        except Exception as e:
+            print(f"[sentence_reward] Error on pair {i}: {e}")
+            rewards.append(0.0)
+            
     return rewards
-
-# -- end of poetry-specific functions --
-
-
-
-# Load the model once globally
-# sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 def sentence_similarity_reward_func(completions, targets, sentence_model=None, **kwargs):
@@ -514,6 +520,45 @@ def sentence_similarity_reward_func(completions, targets, sentence_model=None, *
             rewards[i] = reward
 
     return rewards
+
+
+def global_poetry_reward_func(
+        completions: List[str],
+        poem_end:   List[str],      # the gold continuation
+        ref_start:  List[str],      # pass the given first-third here
+    ) -> List[float]:
+
+    rewards = []
+
+    # Weights : tweak as you wish, must sum to 1
+    q, r, s, t = 0.30, 0.25, 0.25, 0.20   # sim, form, rhymes, syllables
+
+    for completion, gold_answer, gold_begin in zip(completions, poem_end, ref_start):
+        gen = extract_answer_text(completion)
+
+        # 1) semantic similarity on the continuation only
+        similarity = sentence_similarity_reward_func(gen, gold_answer)
+
+        # 2) binary structural form (full poem)
+        form_ok = reward_poem_form(gold_begin + gold_answer,
+                                   gold_begin + gen)
+
+        # 3) rhyme & syllable continuums
+        rhyme_score    = rhyme_accuracy(gen, gold_answer)
+        syllable_score = syllable_accuracy(gen, gold_answer)
+
+        final_reward = (
+              q * similarity
+            + r * form_ok
+            + s * rhyme_score
+            + t * syllable_score
+        )
+        rewards.append(final_reward)
+
+    return rewards
+
+# -- end of poetry-specific functions --
+
 
 
 def main_rewards():

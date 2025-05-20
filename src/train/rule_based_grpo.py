@@ -10,7 +10,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers import AutoTokenizer
 from datasets import load_dataset
 from trl import GRPOConfig, GRPOTrainer, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, equation_reward_func, global_poetry_reward_func, sentence_similarity_reward_func
+from rewards import format_reward_func, equation_reward_func, sentence_similarity_reward_func, reward_poem_form, rhyme_accuracy, syllable_accuracy
 from sentence_transformers import SentenceTransformer, util
 from functools import partial
 from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
@@ -120,17 +120,12 @@ def grpo_function(
         sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
         print(f"Sentence_model on device: {sentence_model.device}")
         similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
-        reward_functions = [format_reward_with_norm, similarity_reward]
-        training_args.reward_weights = [0.5, 0.5]
+        reward_functions = [format_reward_with_norm, similarity_reward, reward_poem_form, rhyme_accuracy, syllable_accuracy]
+        training_args.reward_weights = [0.1, 0.25, 0.25, 0.15, 0.25]
 
     #########################
     # Instantiate DPO trainer
     #########################
-    
-    if script_args.task_type == "math":
-        reward_functions = [format_reward_func, equation_reward_func]
-    elif script_args.task_type == "poetry":
-        reward_functions = [format_reward_func, global_poetry_reward_func]
 
     trainer = GRPOTrainer(
       model=model_args.model_name_or_path,
