@@ -10,3 +10,4 @@ rewards
 dataclasses
 lighteval
 torch
+hf_transfer
