@@ -42,7 +42,7 @@ for i in "${!MODELS[@]}"; do
 
     # for TASK in aime24 aime25 math_500 "gpqa:diamond" U_math; do
     # for TASK in math_calculation; do
-    for TASK in poetry_calulation; do
+    for TASK in poetry_calculation; do
 
         echo "Running evaluation for $TASK with model $MODEL and generation size $GEN_SIZE"
         

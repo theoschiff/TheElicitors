@@ -10,6 +10,7 @@ from rewards import (
     rhyme_accuracy,
     syllable_accuracy
 )
+from functools import partial
 from lighteval.metrics.metrics import SampleLevelMetric, MetricCategory, MetricUseCase, Metrics
 import numpy as np
 from lighteval.tasks.lighteval_task import LightevalTaskConfig
@@ -46,7 +47,11 @@ def math_calculation_metric(
         "avg_score": [(fmt_score[0] + eq_score[0]) / 2],
     }
     
-    
+sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+similarity_reward_with_norm = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
+similarity_reward_with_norm.__name__ = "sentence_similarity_reward_func"
+
+
 def poetry_calculation_metric(
     predictions: list[str], 
     formatted_doc: Doc, 
@@ -60,11 +65,10 @@ def poetry_calculation_metric(
     """
     fmt_score = format_reward_func(predictions)
     
-    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+    
     similarity_score = sentence_similarity_reward_func(
         completions=predictions,
         targets=[formatted_doc.choices[0]],
-        sentence_model=sentence_model
     )
     
     reward_poem_form_score = reward_poem_form(

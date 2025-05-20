@@ -2,6 +2,7 @@ import os
 import random
 import nltk
 nltk.download('cmudict')
+from nltk.corpus import cmudict
 import torch
 import re
 from sentence_transformers import util
