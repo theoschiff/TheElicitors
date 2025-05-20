@@ -2,7 +2,7 @@
 #SBATCH --chdir /home/barghorn/TheElicitors
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:3
+#SBATCH --gres=gpu:2
 #SBATCH --partition l40s
 #SBATCH --time=10:0:0
 #SBATCH --account sma-llm-botafogo
@@ -42,8 +42,8 @@ trl vllm-serve --model Qwen/Qwen3-1.7B &
 sleep 120
 echo "Starting GRPO training"
 
-export CUDA_VISIBLE_DEVICES=1,2
+export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
-    accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
+    accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 1 \
     train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
 

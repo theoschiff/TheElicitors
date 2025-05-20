@@ -104,13 +104,19 @@ def grpo_function(
     logger.info(f"Using normalization method: {script_args.normalization}")
     
 
-    def format_reward_with_norm(*args, **kwargs):
-        return format_reward_func(*args, normalization=script_args.normalization, **kwargs)
-    def equation_reward_with_norm(*args, **kwargs):
-        return equation_reward_func(*args, normalization=script_args.normalization, **kwargs)
+    format_reward_with_norm = partial(format_reward_func, normalization=script_args.normalization)
+    equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
+    similarity_reward_with_norm = partial(sentence_similarity_reward_func, normalization=script_args.normalization)
+    reward_poem_form_with_norm = partial(reward_poem_form, normalization=script_args.normalization)
+    rhyme_accuracy_with_norm = partial(rhyme_accuracy, normalization=script_args.normalization)
+    syllable_accuracy_with_norm = partial(syllable_accuracy, normalization=script_args.normalization)
 
     format_reward_with_norm.__name__ = "format_reward_func"
     equation_reward_with_norm.__name__ = "equation_reward_func"
+    similarity_reward_with_norm.__name__ = "sentence_similarity_reward_func"
+    reward_poem_form_with_norm.__name__ = "reward_poem_form"
+    rhyme_accuracy_with_norm.__name__ = "rhyme_accuracy"
+    syllable_accuracy_with_norm.__name__ = "syllable_accuracy"
 
     
     if script_args.task_type == "math":
@@ -119,8 +125,8 @@ def grpo_function(
     elif script_args.task_type == "poetry":
         sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
         print(f"Sentence_model on device: {sentence_model.device}")
-        similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
-        reward_functions = [format_reward_with_norm, similarity_reward, reward_poem_form, rhyme_accuracy, syllable_accuracy]
+        similarity_reward_with_norm = partial(similarity_reward_with_norm, sentence_model=sentence_model)
+        reward_functions = [format_reward_with_norm, similarity_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
         training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
 
     #########################
