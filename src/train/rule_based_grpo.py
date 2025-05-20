@@ -87,7 +87,7 @@ def grpo_function(
     if script_args.task_type == "math":
         dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
     elif script_args.task_type == "poetry":
-        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
+        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(tokenizer, x["author"], x["title"], x["poem_start"], x["form"]))
     
     print(f"Dataset size: {len(dataset)}")
     print(f"Dataset sample: {dataset[0]}")
