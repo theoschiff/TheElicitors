@@ -11,3 +11,6 @@ dataclasses
 lighteval
 torch
 hf_transfer
+nltk
+tensorboard
+tensorboardX
