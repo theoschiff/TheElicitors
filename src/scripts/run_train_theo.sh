@@ -12,11 +12,15 @@
 
 echo STARTING AT `date`
 
-module load gcc cuda openmpi python
+module load gcc cuda openmpi
 
-cd ..
+
+source ~/anaconda3/etc/profile.d/conda.sh
 conda activate RL_env
 
+echo "Conda environment after activation: $CONDA_DEFAULT_ENV"
+
+echo "Python version: $(python --version)"
 
 nvcc --version
 
@@ -30,18 +34,18 @@ export TOKENIZERS_PARALLELISM=true
 
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-export HF_HOME="/scratch/schifferlearning/.cache"
+export HF_HOME="/scratch/izar/schiffer/.cache"
 
 python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
 
 export CUDA_VISIBLE_DEVICES=0
-trl vllm-serve --model google/gemma-3-1b-it &
+trl vllm-serve --model Qwen/Qwen3-1.7B &
 
 sleep 120
 echo "Starting GRPO training"
 
 export CUDA_VISIBLE_DEVICES=1
 ACCELERATE_LOG_LEVEL=info \
-    accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 2 \
-    train/rule_based_grpo.py --config reciepes/rule_based_grpo.yaml
+    accelerate launch --config_file src/configs/deepspeed_zero3.yaml --num_processes 2 \
+    src/train/rule_based_grpo.py --config src/receipes/rule_based_grpo.yaml
 
