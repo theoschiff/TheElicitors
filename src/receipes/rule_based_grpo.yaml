@@ -14,7 +14,7 @@ output_dir: /scratch/barghorn/Qwen/Qwen3-1.7B/Qwen-poetry-no-normalization
 # output_dir: /scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-no_normalization
 
 # Dataset arguments
-# dataset_id_or_path: Jiayi-Pan/Countdown-Tasks-3to4 #For math task
+# dataset_id_or_path: Jeremmmyyyyy/Math #For math task
 task_type : poetry
 dataset_id_or_path: schifferlearning/Poetry-Categorized #For poetry task 
 nomalization: none
