@@ -481,13 +481,29 @@ def reward_poem_form(completions, target=None, poem_end=None, normalization="non
     return rewards
 
 
-def sentence_similarity_reward_func(completions, target = None, poem_end=None, sentence_model=None, normalization="none", **kwargs):
+cached_st_model = None
+
+def sentence_similarity_reward_func(completions, target = None, poem_end=None, normalization="none", **kwargs):
     """
     Computes cosine similarity between predicted and target answers using a shared embedding model.
     Assumes format: <think>...</think>\n<answer>...</answer>
     """
     if sentence_model is None:
         raise ValueError("sentence_model must be provided")
+
+
+    def _get_st_model():
+        # workaround to have the cached embedding model
+        global _cached_st_model
+        if _cached_st_model is None:
+            from sentence_transformers import SentenceTransformer
+            _cached_st_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            _cached_st_model.eval()
+            for p in _cached_st_model.parameters():
+                p.requires_grad_(False)
+        return _cached_st_model
+
+    sentence_model = _get_st_model() 
 
     regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
 
@@ -522,7 +538,7 @@ def sentence_similarity_reward_func(completions, target = None, poem_end=None, s
         embeddings = sentence_model.encode(
             to_encode,
             convert_to_tensor=True,
-            device='cuda' if torch.cuda.is_available() else 'cpu'
+            device="cuda" if torch.cuda.is_available() else "cpu",
         )
 
         for j, i in enumerate(valid_pairs):

@@ -15,7 +15,6 @@ from sentence_transformers import SentenceTransformer, util
 from functools import partial
 from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
 
-
 ########################
 # Custom dataclasses
 ########################
@@ -106,15 +105,15 @@ def grpo_function(
 
     format_reward_with_norm = partial(format_reward_func, normalization=script_args.normalization)
     equation_reward_with_norm = partial(equation_reward_func, normalization=script_args.normalization)
-    sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-    similarity_reward_with_norm = partial(sentence_similarity_reward_func, normalization=script_args.normalization, sentence_model=sentence_model)
+
+    # similarity_reward_with_norm = partial(sentence_similarity_reward_func, normalization=script_args.normalization)
     reward_poem_form_with_norm = partial(reward_poem_form, normalization=script_args.normalization)
     rhyme_accuracy_with_norm = partial(rhyme_accuracy, normalization=script_args.normalization)
     syllable_accuracy_with_norm = partial(syllable_accuracy, normalization=script_args.normalization)
 
     format_reward_with_norm.__name__ = "format_reward_func"
     equation_reward_with_norm.__name__ = "equation_reward_func"
-    similarity_reward_with_norm.__name__ = "sentence_similarity_reward_func"
+    # similarity_reward_with_norm.__name__ = "sentence_similarity_reward_func"
     reward_poem_form_with_norm.__name__ = "reward_poem_form"
     rhyme_accuracy_with_norm.__name__ = "rhyme_accuracy"
     syllable_accuracy_with_norm.__name__ = "syllable_accuracy"
@@ -124,8 +123,12 @@ def grpo_function(
         reward_functions = [format_reward_with_norm, equation_reward_with_norm]
         training_args.reward_weights = [0.5, 0.5]
     elif script_args.task_type == "poetry":
-        reward_functions = [format_reward_with_norm, similarity_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
-        training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
+        # reward_functions = [format_reward_with_norm, similarity_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
+        # training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
+        reward_functions = [format_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
+        training_args.reward_weights = [0.1, 0.4, 0.15, 0.35]
+
+
 
     #########################
     # Instantiate DPO trainer
