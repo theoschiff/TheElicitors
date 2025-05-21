@@ -1,6 +1,5 @@
 import os
 import random
-import openai
 import re
 import torch
 import nltk
@@ -12,6 +11,7 @@ from sentence_transformers import util
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List
 from functools import partial
+import requests
 
 
  
@@ -193,56 +193,54 @@ def make_gold_answer_logprob_reward(
     def reward_fn(
         prompts: List[str],
         completions: List[str],
-        poem_end: List[str],
-        gold_answers: List[str],
+        gold_answers: List[str] = None,
+        poem_end: List[str] = None,
         **kwargs,  # any extra dataset fields are ignored
     ) -> List[float]:
         rewards = []
         token_counts = []  # For token-level normalization
         
-        real_target = gold_answers if gold_answers is not None else poem_end
+        real_target = poem_end if poem_end is not None else gold_answers
         
         # process in batches
         for i in range(0, len(prompts), batch_size):
             slice_end = i + batch_size
-            ctxs = []
-            
-            # build each context = prompt + reasoning + "</think>\n"
-            for prompt, completion, gold_answer in zip(
-                prompts[i:slice_end], 
-                completions[i:slice_end], 
-                real_target[i:slice_end]
+            messages = []
+            for prompt, completion, target in zip(
+                prompts[i:slice_end],
+                completions[i:slice_end],
+                real_target[i:slice_end],
             ):
                 m = re.search(r"<think>([\s\S]*?)</think>", completion)
                 reasoning = m.group(1) if m else ""
-                
-                ctxs.append(prompt + reasoning + "</think>\n<answer>" + gold_answer + "</answer>")
-            
-            # call vLLM in one go
-            resp = openai.Completion.create(
-                model = model_name,
-                prompt = ctxs,    # list of strings
-                max_tokens = 0,   # no new tokens
-                echo = True,      # return logprobs for all input tokens
-                logprobs = 1,
-            )
+                content = prompt + reasoning + "</think>\n" + \
+                          f"<answer>{target}</answer>"
+                messages.append({"role": "user", "content": content})
+
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "max_tokens": 0,
+                "temperature": 0.0,
+                "logprobs": True,
+                "top_logprobs": 1,
+            }
+            # no Authorization header → nothing breaks
+            r = requests.post(f"{api_base.rstrip('/')}/v1/chat/completions",
+                              json=payload,
+                              headers={"Content-Type": "application/json"})
+            r.raise_for_status()
+            resp = r.json()
             
             # extract per-example rewards
-            for choice, gold_answer in zip(resp.choices, real_target[i:slice_end]):
-                token_logprobs = choice.logprobs.token_logprobs
-                
-                # how many logprobs correspond to the gold_answer?
+            for choice, target in zip(resp["choices"], real_target[i:slice_end]):
+                token_logprobs = choice["logprobs"]["token_logprobs"]
                 ans_ids = tokenizer(
-                    "<answer>" + gold_answer + "</answer>",
-                    add_special_tokens=False
+                    f"<answer>{target}</answer>", add_special_tokens=False
                 ).input_ids
                 n = len(ans_ids)
-                
-                # Store the raw reward (sum of logprobs)
                 reward = sum(token_logprobs[-n:])
                 rewards.append(reward)
-                
-                # Store token count for token-level normalization
                 token_counts.append(n)
         
         # Apply normalization using the defined function
