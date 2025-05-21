@@ -14,4 +14,3 @@ hf_transfer
 nltk
 tensorboard
 tensorboardX
-openai
