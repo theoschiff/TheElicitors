@@ -11,7 +11,10 @@ from sentence_transformers import util
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List
 from functools import partial
-import requests
+import numpy as np
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
+
 
 
  
@@ -162,8 +165,7 @@ def equation_reward_func(completions, target, nums, normalization="none", **kwar
     return rewards
 
 def make_gold_answer_logprob_reward(
-    api_base: str,
-    model_name: str,
+    model,
     tokenizer,
     batch_size: int = 8,
     normalization: str = "none",
@@ -186,9 +188,8 @@ def make_gold_answer_logprob_reward(
     Returns:
         function: Reward function
     """
-    # configure OpenAI-compatible client
-    openai.api_base = api_base.rstrip("/") + "/v1"
-    openai.api_key = ""
+    # url = f"{api_base}/generate"
+    device = model.device if hasattr(model, "device") else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     def reward_fn(
         prompts: List[str],
@@ -197,56 +198,98 @@ def make_gold_answer_logprob_reward(
         poem_end: List[str] = None,
         **kwargs,  # any extra dataset fields are ignored
     ) -> List[float]:
+        
         rewards = []
-        token_counts = []  # For token-level normalization
+        token_counts = []
+        full_logprobs = []
         
-        real_target = poem_end if poem_end is not None else gold_answers
+        model.eval()
         
-        # process in batches
-        for i in range(0, len(prompts), batch_size):
-            slice_end = i + batch_size
-            messages = []
-            for prompt, completion, target in zip(
-                prompts[i:slice_end],
-                completions[i:slice_end],
-                real_target[i:slice_end],
-            ):
-                m = re.search(r"<think>([\s\S]*?)</think>", completion)
-                reasoning = m.group(1) if m else ""
-                content = prompt + reasoning + "</think>\n" + \
-                          f"<answer>{target}</answer>"
-                messages.append({"role": "user", "content": content})
+        gold_labels = gold_answers if gold_answers is not None else poem_end
+        
+        batch_size = 2
 
-            payload = {
-                "model": model_name,
-                "messages": messages,
-                "max_tokens": 0,
-                "temperature": 0.0,
-                "logprobs": True,
-                "top_logprobs": 1,
-            }
-            # no Authorization header → nothing breaks
-            r = requests.post(f"{api_base.rstrip('/')}/v1/chat/completions",
-                              json=payload,
-                              headers={"Content-Type": "application/json"})
-            r.raise_for_status()
-            resp = r.json()
+        # Don't append to the list you're iterating over
+        batched_prompts_ids = []
+        batched_completions_ids = []
+        batched_ids = []
+
+        for prompt, completion, gold_answer in zip(prompts, completions, gold_labels):
+            m = re.search(r"<think>([\s\S]*?)</think>", completion)
+            reasoning = m.group(1) if m else ""
             
-            # extract per-example rewards
-            for choice, target in zip(resp["choices"], real_target[i:slice_end]):
-                token_logprobs = choice["logprobs"]["token_logprobs"]
-                ans_ids = tokenizer(
-                    f"<answer>{target}</answer>", add_special_tokens=False
-                ).input_ids
-                n = len(ans_ids)
-                reward = sum(token_logprobs[-n:])
-                rewards.append(reward)
-                token_counts.append(n)
+            full_prompt = prompt + reasoning + "</think>\n"
+            full_completion = f"<answer>{gold_answer}</answer>"
+
+            # Tokenize to get input_ids (not BatchEncoding objects)
+            prompt_ids = tokenizer(full_prompt, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0).to(device)
+            completion_ids = tokenizer(full_completion, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0).to(device)
+
+            # Store separately if needed
+            batched_prompts_ids.append(prompt_ids)
+            batched_completions_ids.append(completion_ids)
+
+            # Concatenate for full input
+            full_input = torch.cat([prompt_ids, completion_ids], dim=0)
+            batched_ids.append(full_input)
         
-        # Apply normalization using the defined function
-        rewards = normalize_rewards(rewards, normalization, token_counts if normalization == "token-level" else None)
+        batched_ids_padded = pad_sequence(batched_ids, batch_first=True, padding_value=tokenizer.pad_token_id)
+
+        # Create attention masks (1 for actual tokens, 0 for padding)
+        attention_masks = (batched_ids_padded != tokenizer.pad_token_id).long()
+
+        # Move to device
+        batched_ids_padded = batched_ids_padded.to(device)
+        attention_masks = attention_masks.to(device)
         
-        return rewards
+        
+        # Batched inference with batch size 8
+        logits_list = []
+        with torch.no_grad():
+            for i in range(0, batched_ids_padded.size(0), batch_size):
+                input_ids_batch = batched_ids_padded[i:i+batch_size]
+                attention_mask_batch = attention_masks[i:i+batch_size]
+                outputs = model(input_ids=input_ids_batch, attention_mask=attention_mask_batch)
+                logits_list.append(outputs.logits)
+        logits = torch.cat(logits_list, dim=0)
+            
+        for batch_idx in range(len(batched_ids)):
+            prompt_len = batched_prompts_ids[batch_idx].size(0)
+            completion_ids = batched_completions_ids[batch_idx]
+            example_logprobs = []
+
+            for i, token_id in enumerate(completion_ids):
+                pos = prompt_len + i - 1 
+                if pos >= logits.size(1):
+                    print(f"Warning: Skipping token at pos {pos} (out of bounds) for batch {batch_idx}")
+                    continue
+
+                logits_for_token = logits[batch_idx, pos]  # use correct batch index
+                log_probs = F.log_softmax(logits_for_token, dim=-1)
+                logprob = log_probs[token_id].item()
+                example_logprobs.append(logprob)
+
+            full_logprobs.append(np.abs(sum(example_logprobs))) # For min max scaling we need positive values
+            
+        min_lp = np.min(full_logprobs)
+        max_lp = np.max(full_logprobs)
+        
+        if min_lp == max_lp:
+            normalized = np.ones_like(full_logprobs)
+        else:
+            normalized = (full_logprobs - min_lp) / (max_lp - min_lp)
+
+        print("Full logprobs for all examples:", full_logprobs)
+        print("Normalized logprobs:", normalized)
+        print("Number of examples:", len(full_logprobs))
+        
+        del batched_ids_padded
+        del attention_masks
+        del logits
+        del logits_list
+        torch.cuda.empty_cache()
+        
+        return normalized
     
     return reward_fn
 

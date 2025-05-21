@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import torch
 from transformers.trainer_utils import get_last_checkpoint
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 from trl import GRPOConfig, get_peft_config, ModelConfig, TrlParser
 from rewards import format_reward_func, global_poetry_reward_func, make_gold_answer_logprob_reward, sentence_similarity_reward_func, make_gold_answer_logprob_reward
@@ -24,7 +24,7 @@ class ScriptArguments:
     normalization: str = "none"  # Options: none, token-level, z-score, min-max
     task_type: str = "math"
     use_logprob_reward: bool = True
-    vllm_api_base: str = "http://localhost:8000"
+    vllm_api_base: str = "http://0.0.0.0:8000"
    
 ########################
 # Setup logging
@@ -67,7 +67,11 @@ def grpo_log_based_function(
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-
+        
+    model = AutoModelForCausalLM.from_pretrained(
+        model_args.model_name_or_path,
+    )
+    
     ###############
     # Load datasets
     ###############
@@ -111,8 +115,8 @@ def grpo_log_based_function(
     
     if script_args.use_logprob_reward:
         gold_logprob_reward = make_gold_answer_logprob_reward(
-            model_name    = model_args.model_name_or_path,
-            api_base   = script_args.vllm_api_base,
+            model    = model,
+            # api_base   = script_args.vllm_api_base,
             tokenizer  = tokenizer,
             batch_size    = training_args.per_device_train_batch_size, # 8 # tune for your GPU / throughput
             normalization = script_args.normalization
@@ -131,7 +135,7 @@ def grpo_log_based_function(
     # Instantiate GRPO trainer
     #########################
     trainer = GRPOLogProbTrainer(
-        model=model_args.model_name_or_path,
+        model=model,
         reward_funcs=reward_functions,
         args=training_args,
         train_dataset=train_dataset,

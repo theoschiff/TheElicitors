@@ -7,7 +7,10 @@ class GRPOLogProbTrainer(GRPOTrainer):
     # I want init to be the same as GRPOTRainer and take the same arguments, except that it needs to create a new self.think_token using the tokenizer passed to init
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.think_tokens = self.tokenizer.encode("<\think>", add_special_tokens=False, return_tensors="pt").squeeze().to(self.model.device) # Tensor of shape (n,)]
+        self.think_tokens = torch.tensor(
+            self.tokenizer.encode("</think>", add_special_tokens=False),
+            device=self.model.device
+        )
 
     @staticmethod
     def _mask_after_last_think(

@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
-#SBATCH --partition l40s
+#SBATCH --partition h100
 #SBATCH --time=10:0:0
 #SBATCH --account sma-llm-botafogo
 #SBATCH --ntasks-per-node=1
