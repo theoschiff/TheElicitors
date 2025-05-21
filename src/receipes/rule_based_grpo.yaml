@@ -10,7 +10,7 @@ tf32: false
 # set in the terminal before training:
 # export HF_USERNAME=your_hf_username 
 # output_dir: /scratch/${HF_USERNAME}/google/gemma-3-1b-it/poetry
-output_dir: /scratch/barghorn/Qwen/Qwen3-1.7B/Qwen-poetry-no-normalization
+output_dir: /scratch/barghorn/Qwen/Qwen3-1.7B/Qwen-poetry-logprob-no-norm
 # output_dir: /scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-no_normalization
 
 # Dataset arguments

@@ -193,11 +193,14 @@ def make_gold_answer_logprob_reward(
     def reward_fn(
         prompts: List[str],
         completions: List[str],
+        poem_end: List[str],
         gold_answers: List[str],
         **kwargs,  # any extra dataset fields are ignored
     ) -> List[float]:
         rewards = []
         token_counts = []  # For token-level normalization
+        
+        real_target = gold_answers if gold_answers is not None else poem_end
         
         # process in batches
         for i in range(0, len(prompts), batch_size):
@@ -208,7 +211,7 @@ def make_gold_answer_logprob_reward(
             for prompt, completion, gold_answer in zip(
                 prompts[i:slice_end], 
                 completions[i:slice_end], 
-                gold_answers[i:slice_end]
+                real_target[i:slice_end]
             ):
                 m = re.search(r"<think>([\s\S]*?)</think>", completion)
                 reasoning = m.group(1) if m else ""
@@ -225,7 +228,7 @@ def make_gold_answer_logprob_reward(
             )
             
             # extract per-example rewards
-            for choice, gold_answer in zip(resp.choices, gold_answers[i:slice_end]):
+            for choice, gold_answer in zip(resp.choices, real_target[i:slice_end]):
                 token_logprobs = choice.logprobs.token_logprobs
                 
                 # how many logprobs correspond to the gold_answer?
