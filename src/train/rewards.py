@@ -1,6 +1,5 @@
 import os
 import random
-import openai
 import re
 import torch
 import nltk
@@ -12,6 +11,10 @@ from sentence_transformers import util
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List
 from functools import partial
+import numpy as np
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
+
 
 
  
@@ -68,7 +71,7 @@ def format_reward_func(completions, target=None, poem_end=None, normalization="n
     """
     rewards = []
 
-    for completion, gt in zip(completions):
+    for completion in completions:
 
       try:
         # add synthetic <think> as its already part of the prompt and prefilled for the assistant to more easily match the regex
@@ -162,8 +165,7 @@ def equation_reward_func(completions, target, nums, normalization="none", **kwar
     return rewards
 
 def make_gold_answer_logprob_reward(
-    api_base: str,
-    model_name: str,
+    model,
     tokenizer,
     batch_size: int = 8,
     normalization: str = "none",
@@ -186,66 +188,108 @@ def make_gold_answer_logprob_reward(
     Returns:
         function: Reward function
     """
-    # configure OpenAI-compatible client
-    openai.api_base = api_base.rstrip("/") + "/v1"
-    openai.api_key = ""
+    # url = f"{api_base}/generate"
+    device = model.device if hasattr(model, "device") else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     def reward_fn(
         prompts: List[str],
         completions: List[str],
-        gold_answers: List[str],
+        gold_answers: List[str] = None,
+        poem_end: List[str] = None,
         **kwargs,  # any extra dataset fields are ignored
     ) -> List[float]:
+        
         rewards = []
-        token_counts = []  # For token-level normalization
+        token_counts = []
+        full_logprobs = []
         
-        # process in batches
-        for i in range(0, len(prompts), batch_size):
-            slice_end = i + batch_size
-            ctxs = []
-            
-            # build each context = prompt + reasoning + "</think>\n"
-            for prompt, completion, gold_answer in zip(
-                prompts[i:slice_end], 
-                completions[i:slice_end], 
-                gold_answers[i:slice_end]
-            ):
-                m = re.search(r"<think>([\s\S]*?)</think>", completion)
-                reasoning = m.group(1) if m else ""
-                
-                ctxs.append(prompt + reasoning + "</think>\n<answer>" + gold_answer + "</answer>")
-            
-            # call vLLM in one go
-            resp = openai.Completion.create(
-                model = model_name,
-                prompt = ctxs,    # list of strings
-                max_tokens = 0,   # no new tokens
-                echo = True,      # return logprobs for all input tokens
-                logprobs = 1,
-            )
-            
-            # extract per-example rewards
-            for choice, gold_answer in zip(resp.choices, gold_answers[i:slice_end]):
-                token_logprobs = choice.logprobs.token_logprobs
-                
-                # how many logprobs correspond to the gold_answer?
-                ans_ids = tokenizer(
-                    "<answer>" + gold_answer + "</answer>",
-                    add_special_tokens=False
-                ).input_ids
-                n = len(ans_ids)
-                
-                # Store the raw reward (sum of logprobs)
-                reward = sum(token_logprobs[-n:])
-                rewards.append(reward)
-                
-                # Store token count for token-level normalization
-                token_counts.append(n)
+        model.eval()
         
-        # Apply normalization using the defined function
-        rewards = normalize_rewards(rewards, normalization, token_counts if normalization == "token-level" else None)
+        gold_labels = gold_answers if gold_answers is not None else poem_end
         
-        return rewards
+        batch_size = 2
+
+        # Don't append to the list you're iterating over
+        batched_prompts_ids = []
+        batched_completions_ids = []
+        batched_ids = []
+
+        for prompt, completion, gold_answer in zip(prompts, completions, gold_labels):
+            m = re.search(r"<think>([\s\S]*?)</think>", completion)
+            reasoning = m.group(1) if m else ""
+            
+            full_prompt = prompt + reasoning + "</think>\n"
+            full_completion = f"<answer>{gold_answer}</answer>"
+
+            # Tokenize to get input_ids (not BatchEncoding objects)
+            prompt_ids = tokenizer(full_prompt, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0).to(device)
+            completion_ids = tokenizer(full_completion, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0).to(device)
+
+            # Store separately if needed
+            batched_prompts_ids.append(prompt_ids)
+            batched_completions_ids.append(completion_ids)
+
+            # Concatenate for full input
+            full_input = torch.cat([prompt_ids, completion_ids], dim=0)
+            batched_ids.append(full_input)
+        
+        batched_ids_padded = pad_sequence(batched_ids, batch_first=True, padding_value=tokenizer.pad_token_id)
+
+        # Create attention masks (1 for actual tokens, 0 for padding)
+        attention_masks = (batched_ids_padded != tokenizer.pad_token_id).long()
+
+        # Move to device
+        batched_ids_padded = batched_ids_padded.to(device)
+        attention_masks = attention_masks.to(device)
+        
+        
+        # Batched inference with batch size 8
+        logits_list = []
+        with torch.no_grad():
+            for i in range(0, batched_ids_padded.size(0), batch_size):
+                input_ids_batch = batched_ids_padded[i:i+batch_size]
+                attention_mask_batch = attention_masks[i:i+batch_size]
+                outputs = model(input_ids=input_ids_batch, attention_mask=attention_mask_batch)
+                logits_list.append(outputs.logits)
+        logits = torch.cat(logits_list, dim=0)
+            
+        for batch_idx in range(len(batched_ids)):
+            prompt_len = batched_prompts_ids[batch_idx].size(0)
+            completion_ids = batched_completions_ids[batch_idx]
+            example_logprobs = []
+
+            for i, token_id in enumerate(completion_ids):
+                pos = prompt_len + i - 1 
+                if pos >= logits.size(1):
+                    print(f"Warning: Skipping token at pos {pos} (out of bounds) for batch {batch_idx}")
+                    continue
+
+                logits_for_token = logits[batch_idx, pos]  # use correct batch index
+                log_probs = F.log_softmax(logits_for_token, dim=-1)
+                logprob = log_probs[token_id].item()
+                example_logprobs.append(logprob)
+
+            full_logprobs.append(np.abs(sum(example_logprobs))) # For min max scaling we need positive values
+            
+        min_lp = np.min(full_logprobs)
+        max_lp = np.max(full_logprobs)
+        
+        if min_lp == max_lp:
+            normalized = np.ones_like(full_logprobs)
+        else:
+            normalized = (full_logprobs - min_lp) / (max_lp - min_lp)
+
+        print("Full logprobs for all examples:", full_logprobs)
+        print("Normalized logprobs:", normalized)
+        print("Number of examples:", len(full_logprobs))
+        
+        del batched_ids_padded
+        del attention_masks
+        del logits
+        del logits_list
+        torch.cuda.empty_cache()
+        
+        return normalized
     
     return reward_fn
 
@@ -481,13 +525,29 @@ def reward_poem_form(completions, target=None, poem_end=None, normalization="non
     return rewards
 
 
-def sentence_similarity_reward_func(completions, target = None, poem_end=None, sentence_model=None, normalization="none", **kwargs):
+cached_st_model = None
+
+def sentence_similarity_reward_func(completions, target = None, poem_end=None, normalization="none", **kwargs):
     """
     Computes cosine similarity between predicted and target answers using a shared embedding model.
     Assumes format: <think>...</think>\n<answer>...</answer>
     """
     if sentence_model is None:
         raise ValueError("sentence_model must be provided")
+
+
+    def _get_st_model():
+        # workaround to have the cached embedding model
+        global _cached_st_model
+        if _cached_st_model is None:
+            from sentence_transformers import SentenceTransformer
+            _cached_st_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            _cached_st_model.eval()
+            for p in _cached_st_model.parameters():
+                p.requires_grad_(False)
+        return _cached_st_model
+
+    sentence_model = _get_st_model() 
 
     regex = r"<think>(.*?)<\/think>\s*<answer>(.*?)<\/answer>"
 
@@ -522,7 +582,7 @@ def sentence_similarity_reward_func(completions, target = None, poem_end=None, s
         embeddings = sentence_model.encode(
             to_encode,
             convert_to_tensor=True,
-            device='cuda' if torch.cuda.is_available() else 'cpu'
+            device="cuda" if torch.cuda.is_available() else "cpu",
         )
 
         for j, i in enumerate(valid_pairs):

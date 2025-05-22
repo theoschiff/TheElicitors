@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
-#SBATCH --partition l40s
+#SBATCH --partition h100
 #SBATCH --time=10:0:0
 #SBATCH --account sma-llm-botafogo
 #SBATCH --ntasks-per-node=1
@@ -39,11 +39,15 @@ python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
 export CUDA_VISIBLE_DEVICES=0
 trl vllm-serve --model Qwen/Qwen3-1.7B &
 
-sleep 120
+# sleep 120
 echo "Starting GRPO training"
 
 export CUDA_VISIBLE_DEVICES=1
+# ACCELERATE_LOG_LEVEL=info \
+#     accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 1 \
+#     train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
+
 ACCELERATE_LOG_LEVEL=info \
     accelerate launch --config_file configs/deepspeed_zero3.yaml --num_processes 1 \
-    train/rule_based_grpo.py --config receipes/rule_based_grpo.yaml
+    train/log_based_grpo.py --config receipes/rule_based_grpo.yaml
 
