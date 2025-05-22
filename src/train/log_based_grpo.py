@@ -131,6 +131,8 @@ def grpo_log_based_function(
         reward_functions.append(format_reward_with_norm)
         training_args.reward_weights = [0.9, 0.1]
 
+    print(f"Reward functions: {reward_functions}")  
+
     #########################
     # Instantiate GRPO trainer
     #########################

@@ -191,7 +191,7 @@ def make_gold_answer_logprob_reward(
     # url = f"{api_base}/generate"
     device = model.device if hasattr(model, "device") else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    def reward_fn(
+    def logprob_reward(
         prompts: List[str],
         completions: List[str],
         gold_answers: List[str] = None,
@@ -199,99 +199,122 @@ def make_gold_answer_logprob_reward(
         **kwargs,  # any extra dataset fields are ignored
     ) -> List[float]:
         
-        rewards = []
-        token_counts = []
-        full_logprobs = []
-        
+    
         model.eval()
-        
-        gold_labels = gold_answers if gold_answers is not None else poem_end
-        
+        device = next(model.parameters()).device
         batch_size = 2
+        full_logprobs = []
+        empty_flags = []  # Track examples with empty reasoning
+        gold_labels = gold_answers if gold_answers is not None else poem_end
 
-        # Don't append to the list you're iterating over
-        batched_prompts_ids = []
-        batched_completions_ids = []
-        batched_ids = []
+        for batch_idx in range(0, len(prompts), batch_size):
+            batch_prompts = prompts[batch_idx:batch_idx+batch_size]
+            batch_completions = completions[batch_idx:batch_idx+batch_size]
+            batch_gold = gold_labels[batch_idx:batch_idx+batch_size]
 
-        for prompt, completion, gold_answer in zip(prompts, completions, gold_labels):
-            m = re.search(r"<think>([\s\S]*?)</think>", completion)
-            reasoning = m.group(1) if m else ""
+            examples = []
+            for prompt, completion, gold in zip(batch_prompts, batch_completions, batch_gold):
+                # Extract reasoning and check if empty
+                m = re.search(r"<think>([\s\S]*?)</think>", completion)
+                reasoning = m.group(1).strip() if m else ""
+                is_empty = not bool(reasoning)  # True if empty content between tags
+
+                full_prompt = prompt + (m.group(0) if m else "<think></think>") + "\n"
+                full_completion = f"<answer>{gold}</answer>"
+
+                # Tokenize components
+                prompt_ids = tokenizer(full_prompt, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0)
+                completion_ids = tokenizer(full_completion, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0)
+                
+                examples.append({
+                    "prompt_ids": prompt_ids.to(device),
+                    "completion_ids": completion_ids.to(device),
+                    "full_input": torch.cat([prompt_ids, completion_ids]).to(device),
+                    "is_empty": is_empty
+                })
+
+            # Batch processing
+            input_ids = pad_sequence(
+                [ex["full_input"] for ex in examples],
+                batch_first=True,
+                padding_value=tokenizer.pad_token_id
+            ).to(device)
             
-            full_prompt = prompt + reasoning + "</think>\n"
-            full_completion = f"<answer>{gold_answer}</answer>"
+            attention_mask = (input_ids != tokenizer.pad_token_id).long().to(device)
 
-            # Tokenize to get input_ids (not BatchEncoding objects)
-            prompt_ids = tokenizer(full_prompt, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0).to(device)
-            completion_ids = tokenizer(full_completion, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0).to(device)
+            # Get logits
+            with torch.no_grad():
+                logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
 
-            # Store separately if needed
-            batched_prompts_ids.append(prompt_ids)
-            batched_completions_ids.append(completion_ids)
-
-            # Concatenate for full input
-            full_input = torch.cat([prompt_ids, completion_ids], dim=0)
-            batched_ids.append(full_input)
-        
-        batched_ids_padded = pad_sequence(batched_ids, batch_first=True, padding_value=tokenizer.pad_token_id)
-
-        # Create attention masks (1 for actual tokens, 0 for padding)
-        attention_masks = (batched_ids_padded != tokenizer.pad_token_id).long()
-
-        # Move to device
-        batched_ids_padded = batched_ids_padded.to(device)
-        attention_masks = attention_masks.to(device)
-        
-        
-        # Batched inference with batch size 8
-        logits_list = []
-        with torch.no_grad():
-            for i in range(0, batched_ids_padded.size(0), batch_size):
-                input_ids_batch = batched_ids_padded[i:i+batch_size]
-                attention_mask_batch = attention_masks[i:i+batch_size]
-                outputs = model(input_ids=input_ids_batch, attention_mask=attention_mask_batch)
-                logits_list.append(outputs.logits)
-        logits = torch.cat(logits_list, dim=0)
-            
-        for batch_idx in range(len(batched_ids)):
-            prompt_len = batched_prompts_ids[batch_idx].size(0)
-            completion_ids = batched_completions_ids[batch_idx]
-            example_logprobs = []
-
-            for i, token_id in enumerate(completion_ids):
-                pos = prompt_len + i - 1 
-                if pos >= logits.size(1):
-                    print(f"Warning: Skipping token at pos {pos} (out of bounds) for batch {batch_idx}")
+            # Calculate logprobs
+            for ex_idx, example in enumerate(examples):
+                if example["is_empty"]:
+                    full_logprobs.append(0.0)
+                    empty_flags.append(True)
                     continue
 
-                logits_for_token = logits[batch_idx, pos]  # use correct batch index
-                log_probs = F.log_softmax(logits_for_token, dim=-1)
-                logprob = log_probs[token_id].item()
-                example_logprobs.append(logprob)
+                prompt_len = example["prompt_ids"].size(0)
+                comp_ids = example["completion_ids"]
+                comp_len = comp_ids.size(0)
+                
+                positions = torch.arange(
+                    prompt_len - 1, 
+                    prompt_len + comp_len - 1,
+                    device=device
+                )
+                
+                valid_positions = positions[positions < logits.size(1)]
+                valid_comp_ids = comp_ids[:valid_positions.size(0)]
+                
+                if valid_positions.size(0) == 0:
+                    logprob_sum = 0.0
+                else:
+                    ex_logits = logits[ex_idx, valid_positions, :]
+                    log_probs = F.log_softmax(ex_logits, dim=-1)
+                    logprob_sum = log_probs.gather(1, valid_comp_ids.unsqueeze(1)).sum().item()
+                
+                full_logprobs.append(logprob_sum)
+                empty_flags.append(False)
 
-            full_logprobs.append(np.abs(sum(example_logprobs))) # For min max scaling we need positive values
-            
-        min_lp = np.min(full_logprobs)
-        max_lp = np.max(full_logprobs)
-        
-        if min_lp == max_lp:
-            normalized = np.ones_like(full_logprobs)
-        else:
-            normalized = (full_logprobs - min_lp) / (max_lp - min_lp)
+            # Clean up
+            del input_ids, attention_mask, logits, examples
+            torch.cuda.empty_cache()
 
-        print("Full logprobs for all examples:", full_logprobs)
-        print("Normalized logprobs:", normalized)
-        print("Number of examples:", len(full_logprobs))
+        print("Full logprobs:", full_logprobs)
+        print("Empty flags:", empty_flags)
+        print(completions)
         
-        del batched_ids_padded
-        del attention_masks
-        del logits
-        del logits_list
-        torch.cuda.empty_cache()
+        # Normalization handling
+        if len(full_logprobs) == 0:
+            return [0.0] * len(prompts)
         
+        # Get non-empty scores for normalization
+        non_empty_scores = [score for score, flag in zip(full_logprobs, empty_flags) if not flag]
+        
+        if not non_empty_scores:  # All examples had empty reasoning
+            return [0.0] * len(full_logprobs)
+        
+        min_score = min(non_empty_scores)
+        max_score = max(non_empty_scores)
+        score_range = max_score - min_score
+
+        normalized = []
+        for score, is_empty in zip(full_logprobs, empty_flags):
+            if is_empty:
+                normalized.append(0.0)
+            else:
+                if score_range == 0:
+                    normalized.append(1.0)  # All non-empty scores are equal
+                else:
+                    norm_score = (score - min_score) / score_range
+                    normalized.append(norm_score)
+        
+        print("Raw rewards:", full_logprobs)
+        print("Empty flags:", empty_flags)
+        print("Normalized rewards:", normalized)
         return normalized
     
-    return reward_fn
+    return logprob_reward
 
 
 

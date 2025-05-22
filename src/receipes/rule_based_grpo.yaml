@@ -46,6 +46,7 @@ resume_from_checkpoint: false
 logging_strategy: steps
 logging_steps: 1
 report_to:
+- wandb
 - tensorboard
 save_strategy: "steps"
 save_steps: 25
