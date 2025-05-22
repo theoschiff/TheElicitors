@@ -12,8 +12,8 @@ Eliciting Reasoning in LLMs Using Logprob-Based Rewards done during EE-556 Reinf
 |Reward|no normalization|length normalization|z-score|min-max|
 |--------------|--------------|--------|--------|--------|
 |Baseline|0.0085|-|-|-|
-|Rule based |0.468|||
-|Log Probabilities||||
+|Rule based |0.363|*|0.4485|*
+|Log Probabilities|**|||
 
 
 ### Poetry : average rewards over all the samples in the test set
