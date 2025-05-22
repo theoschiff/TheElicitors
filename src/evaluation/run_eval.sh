@@ -18,13 +18,16 @@ NUM_GPUS=1
 
 MODELS=(
     Qwen/Qwen3-1.7B-Base
-    # Jeremmmyyyyy/Qwen-math-no-normalization
-    # Jeremmmyyyyy/Gemma-Math-RB-no-norm
+    Jeremmmyyyyy/Qwen-math-no-normalization
+    Jeremmmyyyyy/Gemma-Math-RB-no-norm
+    lindsaybordier/Qwen-math-normalization-z_score
 )
 
 GENERATION_SIZES=(
     2048
-    # 2048
+    2048
+    2048
+    2048
 )
 
 for i in "${!MODELS[@]}"; do
@@ -41,8 +44,8 @@ for i in "${!MODELS[@]}"; do
     OUTPUT_DIR=data/evals/$(basename $MODEL)
 
     # for TASK in aime24 aime25 math_500 "gpqa:diamond" U_math; do
-    # for TASK in math_calculation; do
-    for TASK in poetry_calculation; do
+    for TASK in math_calculation; do
+    # for TASK in poetry_calculation; do
 
         echo "Running evaluation for $TASK with model $MODEL and generation size $GEN_SIZE"
         

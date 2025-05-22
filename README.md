@@ -11,18 +11,22 @@ Eliciting Reasoning in LLMs Using Logprob-Based Rewards done during EE-556 Reinf
 ### MATH : accuracy score on the test set
 |Reward|no normalization|length normalization|z-score|min-max|
 |--------------|--------------|--------|--------|--------|
-|Baseline|0.0085|-|-|-|
-|Rule based |0.468|*|-|*|
-|Log Probabilities||||
+|Baseline|0.0085***|-|-|-|
+|Rule based |0.363|*|0.4485|*
+|Log Probabilities|**|||
 
-* here the two stars indicate that 
 
 ### Poetry : average rewards over all the samples in the test set
 |Reward|no normalization|length normalization|z-score|min-max|
 |--------------|--------------|--------|--------|--------|
-|Baseline|0.0*|-|-|-|
-|Rule based ||-|-|-|
-|Log Probabilities||||
+|Baseline|0.0***|-|-|-|
+|Rule based ||*||*|
+|Log Probabilities|**|||
+
+\* This indicates that applying length normalization or min-max normalization is not meaningful in this case.
+** This highlights that raw log-probabilities, being highly negative when computed over full sentences, are not easily rescalable to a [0, 1] range without additional transformation.
+*** This notes that the baseline was originally evaluated using poetry-specific criteria. However, since the model is required to enclose its final answer within <answer> tags, it failed to do so, leading to poor performance under this evaluation.
+
 
 
 In order to run the logprob-based reward model, you need to change a file in the trl library : 
