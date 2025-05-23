@@ -206,6 +206,8 @@ def make_gold_answer_logprob_reward(
         full_logprobs = []
         empty_flags = []  # Track examples with empty reasoning
         gold_labels = gold_answers if gold_answers is not None else poem_end
+        
+        completions = ["<think>" + c for c in completions]
 
         for batch_idx in range(0, len(prompts), batch_size):
             batch_prompts = prompts[batch_idx:batch_idx+batch_size]
@@ -215,7 +217,7 @@ def make_gold_answer_logprob_reward(
             examples = []
             for prompt, completion, gold in zip(batch_prompts, batch_completions, batch_gold):
                 # Extract reasoning and check if empty
-                m = re.search(r"<think>([\s\S]*?)</think>", completion)
+                m = re.search(r"<think>([\s\S]*?)</think>", "<think>" + completion)
                 reasoning = m.group(1).strip() if m else ""
                 is_empty = not bool(reasoning)  # True if empty content between tags
 
@@ -282,8 +284,9 @@ def make_gold_answer_logprob_reward(
 
         print("Full logprobs:", full_logprobs)
         print("Empty flags:", empty_flags)
-        print(completions)
+        print("<think>" + completions[0])
         
+        full_logprobs = np.abs(full_logprobs)
         # Normalization handling
         if len(full_logprobs) == 0:
             return [0.0] * len(prompts)
@@ -309,8 +312,6 @@ def make_gold_answer_logprob_reward(
                     norm_score = (score - min_score) / score_range
                     normalized.append(norm_score)
         
-        print("Raw rewards:", full_logprobs)
-        print("Empty flags:", empty_flags)
         print("Normalized rewards:", normalized)
         return normalized
     
