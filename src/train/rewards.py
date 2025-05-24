@@ -297,6 +297,8 @@ def make_gold_answer_logprob_reward(
         print("Empty flags:", empty_flags)
         print("Sample with Max prob : ", completions[np.argmax(full_logprobs)])
         
+        print("Real poem_end : ", gold_labels[np.argmax(full_logprobs) % len(gold_labels)])
+        
         full_logprobs = np.abs(full_logprobs)
         # Normalization handling
         if len(full_logprobs) == 0:
