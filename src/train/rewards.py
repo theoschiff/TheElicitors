@@ -167,7 +167,6 @@ def equation_reward_func(completions, target, nums, normalization="none", **kwar
 def make_gold_answer_logprob_reward(
     model,
     tokenizer,
-    batch_size: int = 8,
     normalization: str = "none",
 ):
     """
@@ -188,8 +187,8 @@ def make_gold_answer_logprob_reward(
     Returns:
         function: Reward function
     """
-    # url = f"{api_base}/generate"
-    device = model.device if hasattr(model, "device") else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    normalization = normalization
     
     def logprob_reward(
         prompts: List[str],
@@ -220,6 +219,17 @@ def make_gold_answer_logprob_reward(
                 m = re.search(r"<think>([\s\S]*?)</think>", "<think>" + completion)
                 reasoning = m.group(1).strip() if m else ""
                 is_empty = not bool(reasoning)  # True if empty content between tags
+                
+                # Check for multiple <think> or </think> tags
+                think_open_count = completion.count("<think>")
+                think_close_count = completion.count("</think>")
+                if think_open_count != 1 or think_close_count != 1:
+                    is_empty = True
+                    
+                answer_open_count = completion.count("<answer>")
+                answer_close_count = completion.count("</answer>")
+                if answer_open_count != 1 or answer_close_count != 1:
+                    is_empty = True
 
                 full_prompt = prompt + (m.group(0) if m else "<think></think>") + "\n"
                 full_completion = f"<answer>{gold}</answer>"
@@ -274,17 +284,18 @@ def make_gold_answer_logprob_reward(
                     ex_logits = logits[ex_idx, valid_positions, :]
                     log_probs = F.log_softmax(ex_logits, dim=-1)
                     logprob_sum = log_probs.gather(1, valid_comp_ids.unsqueeze(1)).sum().item()
+                    logprob_sum = logprob_sum / valid_comp_ids.size(0)  
                 
-                full_logprobs.append(logprob_sum)
+                full_logprobs.append(np.exp(logprob_sum)) #get avg logprob per token exponentiated to get a probability
                 empty_flags.append(False)
 
             # Clean up
             del input_ids, attention_mask, logits, examples
             torch.cuda.empty_cache()
 
-        print("Full logprobs:", full_logprobs)
+        print("Full probabilities:", full_logprobs)
         print("Empty flags:", empty_flags)
-        print("<think>" + completions[0])
+        print("Sample with Max prob : ", completions[np.argmax(full_logprobs)])
         
         full_logprobs = np.abs(full_logprobs)
         # Normalization handling
@@ -297,24 +308,47 @@ def make_gold_answer_logprob_reward(
         if not non_empty_scores:  # All examples had empty reasoning
             return [0.0] * len(full_logprobs)
         
-        min_score = min(non_empty_scores)
-        max_score = max(non_empty_scores)
-        score_range = max_score - min_score
-
-        normalized = []
-        for score, is_empty in zip(full_logprobs, empty_flags):
-            if is_empty:
-                normalized.append(0.0)
-            else:
-                if score_range == 0:
-                    normalized.append(1.0)  # All non-empty scores are equal
-                else:
-                    norm_score = (score - min_score) / score_range
-                    normalized.append(norm_score)
         
-        print("Normalized rewards:", normalized)
-        return normalized
-    
+        if normalization == "min-max":
+            min_score = min(non_empty_scores)
+            max_score = max(non_empty_scores)
+            score_range = max_score - min_score
+
+            normalized = []
+            for score, is_empty in zip(full_logprobs, empty_flags):
+                if is_empty:
+                    normalized.append(0.0)
+                else:
+                    if score_range == 0:
+                        normalized.append(1.0)  # All non-empty scores are equal
+                    else:
+                        norm_score = (score - min_score) / score_range
+                        normalized.append(norm_score)
+                        
+            print("Normalized min-max rewards:", normalized)
+            return normalized
+        
+        elif normalization == "z-score":
+            mean_score = np.mean(non_empty_scores)
+            std_score = np.std(non_empty_scores)
+
+            normalized = []
+            for score, is_empty in zip(full_logprobs, empty_flags):
+                if is_empty:
+                    normalized.append(0.0)
+                else:
+                    if std_score == 0:
+                        normalized.append(1.0)
+                    else:
+                        norm_score = (score - mean_score) / std_score
+                        normalized.append(norm_score)
+                        
+            print("Normalized z-score rewards:", normalized)
+            return normalized
+            
+        else:
+            return full_logprobs  # No normalization, return mean logprobs per token exponentiated
+                
     return logprob_reward
 
 

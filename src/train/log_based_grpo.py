@@ -118,7 +118,6 @@ def grpo_log_based_function(
             model    = model,
             # api_base   = script_args.vllm_api_base,
             tokenizer  = tokenizer,
-            batch_size    = training_args.per_device_train_batch_size, # 8 # tune for your GPU / throughput
             normalization = script_args.normalization
         )  
         
