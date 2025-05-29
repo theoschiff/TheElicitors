@@ -1,6 +1,5 @@
 import os
 import random
-import openai
 import re
 import torch
 import nltk
@@ -12,6 +11,10 @@ from sentence_transformers import util
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List
 from functools import partial
+import numpy as np
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
+
 
 
  
@@ -162,10 +165,8 @@ def equation_reward_func(completions, target, nums, normalization="none", **kwar
     return rewards
 
 def make_gold_answer_logprob_reward(
-    api_base: str,
-    model_name: str,
+    model,
     tokenizer,
-    batch_size: int = 8,
     normalization: str = "none",
 ):
     """
@@ -186,68 +187,171 @@ def make_gold_answer_logprob_reward(
     Returns:
         function: Reward function
     """
-    # configure OpenAI-compatible client
-    openai.api_base = api_base.rstrip("/") + "/v1"
-    openai.api_key = ""
     
-    def reward_fn(
+    normalization = normalization
+    
+    def logprob_reward(
         prompts: List[str],
         completions: List[str],
-        gold_answers: List[str],
+        gold_answers: List[str] = None,
+        poem_end: List[str] = None,
         **kwargs,  # any extra dataset fields are ignored
     ) -> List[float]:
-        rewards = []
-        token_counts = []  # For token-level normalization
         
-        # process in batches
-        for i in range(0, len(prompts), batch_size):
-            slice_end = i + batch_size
-            ctxs = []
-            
-            # build each context = prompt + reasoning + "</think>\n"
-            for prompt, completion, gold_answer in zip(
-                prompts[i:slice_end], 
-                completions[i:slice_end], 
-                gold_answers[i:slice_end]
-            ):
-                m = re.search(r"<think>([\s\S]*?)</think>", completion)
-                reasoning = m.group(1) if m else ""
-                
-                ctxs.append(prompt + reasoning + "</think>\n<answer>" + gold_answer + "</answer>")
-            
-            # call vLLM in one go
-            resp = openai.Completion.create(
-                model = model_name,
-                prompt = ctxs,    # list of strings
-                max_tokens = 0,   # no new tokens
-                echo = True,      # return logprobs for all input tokens
-                logprobs = 1,
-            )
-            
-            # extract per-example rewards
-            for choice, gold_answer in zip(resp.choices, gold_answers[i:slice_end]):
-                token_logprobs = choice.logprobs.token_logprobs
-                
-                # how many logprobs correspond to the gold_answer?
-                ans_ids = tokenizer(
-                    "<answer>" + gold_answer + "</answer>",
-                    add_special_tokens=False
-                ).input_ids
-                n = len(ans_ids)
-                
-                # Store the raw reward (sum of logprobs)
-                reward = sum(token_logprobs[-n:])
-                rewards.append(reward)
-                
-                # Store token count for token-level normalization
-                token_counts.append(n)
-        
-        # Apply normalization using the defined function
-        rewards = normalize_rewards(rewards, normalization, token_counts if normalization == "token-level" else None)
-        
-        return rewards
     
-    return reward_fn
+        model.eval()
+        device = next(model.parameters()).device
+        batch_size = 2
+        full_logprobs = []
+        empty_flags = []  # Track examples with empty reasoning
+        gold_labels = gold_answers if gold_answers is not None else poem_end
+        
+        completions = ["<think>" + c for c in completions]
+
+        for batch_idx in range(0, len(prompts), batch_size):
+            batch_prompts = prompts[batch_idx:batch_idx+batch_size]
+            batch_completions = completions[batch_idx:batch_idx+batch_size]
+            batch_gold = gold_labels[batch_idx:batch_idx+batch_size]
+
+            examples = []
+            for prompt, completion, gold in zip(batch_prompts, batch_completions, batch_gold):
+                # Extract reasoning and check if empty
+                m = re.search(r"<think>([\s\S]*?)</think>", "<think>" + completion)
+                reasoning = m.group(1).strip() if m else ""
+                is_empty = not bool(reasoning)  # True if empty content between tags
+                
+                # Check for multiple <think> or </think> tags
+                think_open_count = completion.count("<think>")
+                think_close_count = completion.count("</think>")
+                if think_open_count != 1 or think_close_count != 1:
+                    is_empty = True
+                    
+                answer_open_count = completion.count("<answer>")
+                answer_close_count = completion.count("</answer>")
+                if answer_open_count != 1 or answer_close_count != 1:
+                    is_empty = True
+
+                full_prompt = prompt + (m.group(0) if m else "<think></think>") + "\n"
+                full_completion = f"<answer>{gold}</answer>"
+
+                # Tokenize components
+                prompt_ids = tokenizer(full_prompt, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0)
+                completion_ids = tokenizer(full_completion, add_special_tokens=False, return_tensors="pt")["input_ids"].squeeze(0)
+                
+                examples.append({
+                    "prompt_ids": prompt_ids.to(device),
+                    "completion_ids": completion_ids.to(device),
+                    "full_input": torch.cat([prompt_ids, completion_ids]).to(device),
+                    "is_empty": is_empty
+                })
+
+            # Batch processing
+            input_ids = pad_sequence(
+                [ex["full_input"] for ex in examples],
+                batch_first=True,
+                padding_value=tokenizer.pad_token_id
+            ).to(device)
+            
+            attention_mask = (input_ids != tokenizer.pad_token_id).long().to(device)
+
+            # Get logits
+            with torch.no_grad():
+                logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
+
+            # Calculate logprobs
+            for ex_idx, example in enumerate(examples):
+                if example["is_empty"]:
+                    full_logprobs.append(0.0)
+                    empty_flags.append(True)
+                    continue
+
+                prompt_len = example["prompt_ids"].size(0)
+                comp_ids = example["completion_ids"]
+                comp_len = comp_ids.size(0)
+                
+                positions = torch.arange(
+                    prompt_len - 1, 
+                    prompt_len + comp_len - 1,
+                    device=device
+                )
+                
+                valid_positions = positions[positions < logits.size(1)]
+                valid_comp_ids = comp_ids[:valid_positions.size(0)]
+                
+                if valid_positions.size(0) == 0:
+                    logprob_sum = 0.0
+                else:
+                    ex_logits = logits[ex_idx, valid_positions, :]
+                    log_probs = F.log_softmax(ex_logits, dim=-1)
+                    logprob_sum = log_probs.gather(1, valid_comp_ids.unsqueeze(1)).sum().item()
+                    logprob_sum = logprob_sum / valid_comp_ids.size(0)  
+                
+                full_logprobs.append(np.exp(logprob_sum)) #get avg logprob per token exponentiated to get a probability
+                empty_flags.append(False)
+
+            # Clean up
+            del input_ids, attention_mask, logits, examples
+            torch.cuda.empty_cache()
+
+        print("Full probabilities:", full_logprobs)
+        print("Empty flags:", empty_flags)
+        print("Sample with Max prob : ", completions[np.argmax(full_logprobs)])
+        
+        print("Real poem_end : ", gold_labels[np.argmax(full_logprobs) % len(gold_labels)])
+        
+        full_logprobs = np.abs(full_logprobs)
+        # Normalization handling
+        if len(full_logprobs) == 0:
+            return [0.0] * len(prompts)
+        
+        # Get non-empty scores for normalization
+        non_empty_scores = [score for score, flag in zip(full_logprobs, empty_flags) if not flag]
+        
+        if not non_empty_scores:  # All examples had empty reasoning
+            return [0.0] * len(full_logprobs)
+        
+        
+        if normalization == "min-max":
+            min_score = min(non_empty_scores)
+            max_score = max(non_empty_scores)
+            score_range = max_score - min_score
+
+            normalized = []
+            for score, is_empty in zip(full_logprobs, empty_flags):
+                if is_empty:
+                    normalized.append(0.0)
+                else:
+                    if score_range == 0:
+                        normalized.append(1.0)  # All non-empty scores are equal
+                    else:
+                        norm_score = (score - min_score) / score_range
+                        normalized.append(norm_score)
+                        
+            print("Normalized min-max rewards:", normalized)
+            return normalized
+        
+        elif normalization == "z-score":
+            mean_score = np.mean(non_empty_scores)
+            std_score = np.std(non_empty_scores)
+
+            normalized = []
+            for score, is_empty in zip(full_logprobs, empty_flags):
+                if is_empty:
+                    normalized.append(0.0)
+                else:
+                    if std_score == 0:
+                        normalized.append(1.0)
+                    else:
+                        norm_score = (score - mean_score) / std_score
+                        normalized.append(norm_score)
+                        
+            print("Normalized z-score rewards:", normalized)
+            return normalized
+            
+        else:
+            return full_logprobs  # No normalization, return mean logprobs per token exponentiated
+                
+    return logprob_reward
 
 
 

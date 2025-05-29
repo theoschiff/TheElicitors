@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 import torch
 from transformers.trainer_utils import get_last_checkpoint
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 from trl import GRPOConfig, get_peft_config, ModelConfig, TrlParser
-from rewards import format_reward_func, global_poetry_reward_func, make_gold_answer_logprob_reward, sentence_similarity_reward_func
+from rewards import format_reward_func, global_poetry_reward_func, make_gold_answer_logprob_reward, sentence_similarity_reward_func, make_gold_answer_logprob_reward
 from sentence_transformers import SentenceTransformer
 from functools import partial
 from data_utils import generate_r1_math_prompt, generate_r1_poetry_prompt
@@ -23,6 +23,8 @@ class ScriptArguments:
     tokenizer_name_or_path: str = None
     normalization: str = "none"  # Options: none, token-level, z-score, min-max
     task_type: str = "math"
+    use_logprob_reward: bool = True
+    vllm_api_base: str = "http://0.0.0.0:8000"
    
 ########################
 # Setup logging
@@ -65,7 +67,11 @@ def grpo_log_based_function(
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-
+        
+    model = AutoModelForCausalLM.from_pretrained(
+        model_args.model_name_or_path,
+    )
+    
     ###############
     # Load datasets
     ###############
@@ -81,7 +87,7 @@ def grpo_log_based_function(
     if script_args.task_type == "math":
         dataset = dataset.map(lambda x: generate_r1_math_prompt(tokenizer, x["nums"], x["target"]))
     elif script_args.task_type == "poetry":
-        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(x["author"], x["title"], x["poem_start"]))
+        dataset = dataset.map(lambda x: generate_r1_poetry_prompt(tokenizer, x["author"], x["title"], x["poem_start"], x["form"]))
     
     print(f"Dataset size: {len(dataset)}")
     print(f"Dataset sample: {dataset[0]}")
@@ -100,39 +106,37 @@ def grpo_log_based_function(
     logger.info(f"Using normalization method: {script_args.normalization}")
     
     # Create reward functions with the normalization parameter
-    format_reward_with_norm = partial(format_reward_func, normalization="none")
+    format_reward_with_norm = partial(format_reward_func, normalization=script_args.normalization)
 
     # Add __name__ attributes to the partial functions
     format_reward_with_norm.__name__ = "format_reward_func"
 
     reward_functions = []
+    
+    if script_args.use_logprob_reward:
+        gold_logprob_reward = make_gold_answer_logprob_reward(
+            model    = model,
+            # api_base   = script_args.vllm_api_base,
+            tokenizer  = tokenizer,
+            normalization = script_args.normalization
+        )  
+        
+        reward_functions.append(gold_logprob_reward)
 
     if script_args.task_type == "math":
-        reward_functions = [format_reward_with_norm]
-        training_args.reward_weights = [0.5]
+        reward_functions.append(format_reward_with_norm)
+        training_args.reward_weights = [0.9, 0.1]
     elif script_args.task_type == "poetry":
-        sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-        logger.info(f"Sentence model on device: {sentence_model.device}")
-        similarity_reward = partial(sentence_similarity_reward_func, sentence_model=sentence_model)
-        reward_functions = [format_reward_with_norm, similarity_reward]
-        training_args.reward_weights = [0.50]
+        reward_functions.append(format_reward_with_norm)
+        training_args.reward_weights = [0.9, 0.1]
 
-     # Add log-probability-based reward
-    gold_logprob_reward = make_gold_answer_logprob_reward(
-        api_base=script_args.vllm_api_base,
-        model_name=model_args.model_name_or_path,
-        tokenizer=tokenizer,
-        batch_size=training_args.per_device_train_batch_size,
-        normalization=script_args.normalization,
-    )
-    reward_functions.append(gold_logprob_reward)
-    training_args.reward_weights.append(0.50)  # Adjust weight for log-prob reward
+    print(f"Reward functions: {reward_functions}")  
 
     #########################
     # Instantiate GRPO trainer
     #########################
     trainer = GRPOLogProbTrainer(
-        model=model_args.model_name_or_path,
+        model=model,
         reward_funcs=reward_functions,
         args=training_args,
         train_dataset=train_dataset,
