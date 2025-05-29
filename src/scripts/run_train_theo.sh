@@ -3,9 +3,9 @@
 #SBATCH --ntasks-per-node=1  
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
-#SBATCH --partition=gpu
-#SBATCH --time=10:0:0
-# #SBATCH --account master
+#SBATCH --partition=l40s
+#SBATCH --time=8:0:0
+#SBATCH --account nlp
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
 #SBATCH --mem 128G
@@ -41,7 +41,7 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 export MP_START_METHOD=spawn
 
 
-export HF_HOME="/scratch/izar/schiffer/.cache"
+export HF_HOME="/scratch/schiffer/.cache"
 
 
 export CUDA_VISIBLE_DEVICES=0
