@@ -126,7 +126,7 @@ def grpo_function(
         # reward_functions = [format_reward_with_norm, similarity_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
         # training_args.reward_weights = [0.1, 0.25, 0.25, 0.1, 0.30]
         reward_functions = [format_reward_with_norm, reward_poem_form_with_norm, rhyme_accuracy_with_norm, syllable_accuracy_with_norm]
-        training_args.reward_weights = [0.1, 0.4, 0.15, 0.35]
+        training_args.reward_weights = [0.2, 0.3, 0.15, 0.35]
 
 
 
