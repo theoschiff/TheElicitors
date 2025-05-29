@@ -3,21 +3,19 @@ model_name_or_path: Qwen/Qwen3-1.7B
 model_revision: main
 torch_dtype: bfloat16
 attn_implementation: flash_attention_2
-fp16: true
-bf16: false
+fp16: false
+bf16: true
 
 tf32: false
 # set in the terminal before training:
 # export HF_USERNAME=your_hf_username 
-# output_dir: /scratch/${HF_USERNAME}/google/gemma-3-1b-it/poetry
-output_dir: /scratch/barghorn/Qwen/Qwen3-1.7B/Qwen-poetry-no-normalization
-# output_dir: /scratch/izar/bordier/Qwen/Qwen3-1.7B/Qwen-math-no_normalization
+output_dir: /scratch/schiffer/Qwen/Qwen3-1.7B/Qwen-poetry-rule-based-nn
 
 # Dataset arguments
 # dataset_id_or_path: Jeremmmyyyyy/Math #For math task
 task_type : poetry
 dataset_id_or_path: schifferlearning/Poetry-Categorized #For poetry task 
-nomalization: none
+normalization: none
 
 # Training arguments
 num_train_epochs: 2
@@ -37,7 +35,8 @@ max_completion_length: 1024
 num_generations: 4
 
 use_vllm: true
-vllm_gpu_memory_utilization: 0.9
+vllm_gpu_memory_utilization: 0.8
+vllm_mode: server
 resume_from_checkpoint: false
 
 # Logging arguments
