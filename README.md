@@ -1,36 +1,49 @@
 # TheElicitors
-Eliciting Reasoning in LLMs Using Logprob-Based Rewards done during EE-556 Reinforcement Learning Course
+Eliciting Reasoning in LLMs Using Logprob-Based Rewards done during EPFL EE-556 Reinforcement Learning Course
 
-| Model Name   | AIME24 (30 questions) | AIME25 (30 questions) | MATH_500 (500 questions) | GPQA:diamond (198 questions) | U_math (900 questions) |
-|--------------|--------|--------|----------|--------------|--------|
-|google/gemma-3-1b-it| 0.0333 |0.0|0.434|0.288|0.128|
-|Jeremmmyyyyy/gemma-3-1b-Math|0.0 |0.0|0.446|0.032|0.13|
-|||||||
+## Project Overview
+We explore inference-time reinforcement learning to elicit reasoning in language models using Group Relative Policy Optimization (GRPO) with rule-based and logprob-based rewards. Our approach includes a custom loss masking strategy to align training with reasoning-only rewards. Evaluated on math and poetry tasks, logprob rewards improve reasoning plausibility and generalization. These results highlight the potential of logprob signals as domain-agnostic rewards for structured and creative reasoning.
+
+## Environment Setup
+To run this project, please follow these steps:
+1. **Python Packages:**  
+   Install the required packages using:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **TRL and vLLM Setup for Custom LogProb GRPO:**  
+   To run our Custom LogProb GRPO, we must patch the `trl/scripts/vllm_serve.py` file by updating the `generate` function as described below. This fix is needed because, by default, trl generation doesn't provide log probabilities.  
+     
+   Please see the **Log-Probability Reward Model Setup** Section below for detailed patch instructions.
+
+## Folder Structure
+Below is a detailed summary of the important folders in the **src** repository:
+- **scripts:**  
+  Contains the training scripts that demonstrate how to run training jobs for the GRPO Trainer in rule-based and logprob-based settings. One can also modify the training arguments and task (math or poem-completion).
+- **evaluation:**  
+  Contains the evaluation code including helper scripts and the `run_eval.sh` script (which can also be executed from the root) used for running experiments on the generated completions.
+- **train:**  
+  Contains the Python files for training using either rule-based or logprob-based GRPO. This folder also includes helper modules that define rewards, data processing, and additional support functions.
+- **recipes:**  
+  Contains configuration and training argument files specifically for the GRPO Trainer.
+- **notebooks:**  
+  Hosts the Jupyter Notebook used to create and process the poetry dataset.
+- **configs:**  
+  Contains configuration scripts for deepspeed training. This is especially useful for multi-node training setups.
 
 
-### MATH : accuracy score on the test set
-|Reward|no normalization|length normalization|z-score|min-max|
-|--------------|--------------|--------|--------|--------|
-|Baseline|0.0085***|-|-|-|
-|Rule based |0.363|*|0.4485|*
-|Log Probabilities|**|||
+## Training Scripts
+Training scripts can be found in the `src/scripts` folder. They demonstrate how to run training jobs for the GRPO Trainers using the arguments provided in the `src/recipes` folder. 
 
+To start a training session, simply run the following script from the root directory:
+```bash
+sbatch scripts/run_train_V100.sh
+```
+_Note: You will need to adapt the script depending on your hardware requirements._
 
-### Poetry : average rewards over all the samples in the test set
-|Reward|no normalization|length normalization|z-score|min-max|
-|--------------|--------------|--------|--------|--------|
-|Baseline|0.0***|-|-|-|
-|Rule based ||*||*|
-|Log Probabilities|**|||
-
-\* This indicates that applying length normalization or min-max normalization is not meaningful in this case.
-** This highlights that raw log-probabilities, being highly negative when computed over full sentences, are not easily rescalable to a [0, 1] range without additional transformation.
-*** This notes that the baseline was originally evaluated using poetry-specific criteria. However, since the model is required to enclose its final answer within <answer> tags, it failed to do so, leading to poor performance under this evaluation.
-
-
-
+## Log-Probability Reward Model Setup
 In order to run the logprob-based reward model, you need to change a file in the trl library : 
-- first make sure it is installed in your environment (pip install trl[vllm])
+- first make sure it is installed in your environment (`pip install trl[vllm]`)
 - Then go to the trl library folder. Check where all the packages are installed with the following command:
 ```bash
 pip list | tail -n +3 | xargs -exec pip show
@@ -119,3 +132,7 @@ This will allow you to get the CUMULATIVE logprobs of the generated tokens along
 
 See [here](https://github.com/vllm-project/vllm/issues/5234) for implementation details.
 
+
+## Experiments and Results
+
+For a detailed account of our experimental procedures, methodologies, and findings, please refer to the project report located at the root of this directory, `TheElicitorsFinalReport.pdf`.

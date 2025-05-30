@@ -49,7 +49,7 @@ export CUDA_VISIBLE_DEVICES=1
 # Run the training script with Accelerate and DeepSpeed
 ACCELERATE_LOG_LEVEL=info \
     accelerate launch --config_file /home/mellouli/TheElicitors/src/configs/deepspeed_zero3.yaml --num_processes 1 \
-    /home/mellouli/TheElicitors/src/train/rule_based_grpo.py --config /home/mellouli/TheElicitors/src/receipes/rule_based_grpo.yaml
+    /home/mellouli/TheElicitors/src/train/rule_based_grpo.py --config /home/mellouli/TheElicitors/src/recipes/grpo_train_args.yaml
 
 echo "Job finished at $(date)"
 
