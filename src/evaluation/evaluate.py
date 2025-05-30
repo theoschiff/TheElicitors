@@ -66,7 +66,7 @@ def poetry_calculation_metric(
     fmt_score = format_reward_func(predictions)
     
     
-    similarity_score = sentence_similarity_reward_func(
+    similarity_score = similarity_reward_with_norm(
         completions=predictions,
         targets=[formatted_doc.choices[0]],
     )

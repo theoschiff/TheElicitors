@@ -17,17 +17,21 @@ cd src/evaluation
 NUM_GPUS=1
 
 MODELS=(
-    Qwen/Qwen3-1.7B-Base
-    Jeremmmyyyyy/Qwen-math-no-normalization
-    Jeremmmyyyyy/Gemma-Math-RB-no-norm
-    lindsaybordier/Qwen-math-normalization-z_score
+    # Qwen/Qwen3-1.7B-Base
+    # schifferlearning/Qwen-math-logprob-no-norm
+    # schifferlearning/Qwen-poetry-rule-based-nn
+    # Jeremmmyyyyy/Qwen-poetry-logprob-no-norm-v4
+    schifferlearning/Qwen-math-logprob-no-norm
+    # Jeremmmyyyyy/Qwen-math-no-normalization
+    # Jeremmmyyyyy/Gemma-Math-RB-no-norm
+    # lindsaybordier/Qwen-math-normalization-z_score
 )
 
 GENERATION_SIZES=(
+    # 2048
     2048
-    2048
-    2048
-    2048
+    # 2048
+    # 2048
 )
 
 for i in "${!MODELS[@]}"; do
@@ -40,7 +44,7 @@ for i in "${!MODELS[@]}"; do
     echo "Generation Size: $GEN_SIZE"
     echo "-----------------------------------------------------"
 
-    MODEL_ARGS="model_name=$MODEL,dtype=bfloat16,max_model_length=$GEN_SIZE,tensor_parallel_size=$NUM_GPUS,gpu_memory_utilization=0.9,generation_parameters={max_new_tokens:$GEN_SIZE,temperature:0.6,top_p:0.95}"
+    MODEL_ARGS="pretrained=$MODEL,dtype=bfloat16,max_model_length=$GEN_SIZE,tensor_parallel_size=$NUM_GPUS,gpu_memory_utilization=0.9,generation_parameters={max_new_tokens:$GEN_SIZE,temperature:0.6,top_p:0.95}"
     OUTPUT_DIR=data/evals/$(basename $MODEL)
 
     # for TASK in aime24 aime25 math_500 "gpqa:diamond" U_math; do
